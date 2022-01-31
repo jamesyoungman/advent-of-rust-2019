@@ -7,6 +7,9 @@ edition = "2021"
 
 [dependencies]
 
+[lib]
+name = "cpu"
+path = "src/cpu/lib.rs"
+
 [[bin]]
 name = "day01"
-path = "src/day01.rs"
