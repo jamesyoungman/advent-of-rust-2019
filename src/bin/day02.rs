@@ -1,6 +1,7 @@
 use std::io;
 use std::io::prelude::*;
 
+use cpu::InputOutputError;
 use cpu::Processor;
 use cpu::Word;
 
@@ -9,8 +10,9 @@ fn run_program(program: &[Word], noun: Word, verb: Word) -> Word {
     modified_program[1] = noun;
     modified_program[2] = verb;
     let mut cpu = Processor::new(Word(0));
-    cpu.load(Word(0), &modified_program);
-    let discard_output = |_| {};
+    cpu.load(Word(0), &modified_program)
+        .expect("load base address should be valid");
+    let discard_output = |_| -> Result<(), InputOutputError> { Ok(()) };
     let no_input = Vec::new();
     if let Err(e) = cpu.run_with_fixed_input(&no_input, discard_output) {
         panic!("program should be valid: {:?}", e);

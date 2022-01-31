@@ -1,5 +1,3 @@
-use core::ops::{Add, Mul};
-
 use std::fmt::Display;
 
 use std::num::TryFromIntError;
@@ -9,57 +7,138 @@ pub const NUM_PARAMS: usize = 4;
 #[derive(Clone, Copy, Debug)]
 pub struct Word(pub i64);
 
+impl Word {
+    fn checked_add(&self, other: &Word) -> Result<Word, CpuFault> {
+        match self.0.checked_add(other.0) {
+            Some(total) => Ok(Word(total)),
+            None => Err(CpuFault::Overflow),
+        }
+    }
+
+    fn checked_add_usize(&self, other: &usize) -> Result<Word, CpuFault> {
+        let n: i64 = match i64::try_from(*other) {
+            Ok(x) => x,
+            Err(_) => {
+                return Err(CpuFault::Overflow);
+            }
+        };
+        match self.0.checked_add(n) {
+            Some(total) => Ok(Word(total)),
+            None => Err(CpuFault::Overflow),
+        }
+    }
+
+    fn checked_mul(&self, other: &Word) -> Result<Word, CpuFault> {
+        match self.0.checked_mul(other.0) {
+            Some(product) => Ok(Word(product)),
+            None => Err(CpuFault::Overflow),
+        }
+    }
+}
+
+fn add(a: Word, b: Word) -> Result<Word, CpuFault> {
+    a.checked_add(&b)
+}
+
+fn mul(a: Word, b: Word) -> Result<Word, CpuFault> {
+    a.checked_mul(&b)
+}
+
 impl Display for Word {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl Add<i64> for Word {
-    type Output = Word;
+#[derive(Debug, Copy, Clone)]
+pub struct BadAddressingMode {
+    mode: i64,
+}
 
-    fn add(self, rhs: i64) -> Self::Output {
-        Word(self.0 + rhs)
+impl Display for BadAddressingMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "bad parameter mode {}", self.mode)
     }
 }
 
-impl Add<usize> for Word {
-    type Output = Word;
+impl std::error::Error for BadAddressingMode {}
 
-    fn add(self, rhs: usize) -> Self::Output {
-        match rhs.try_into() {
-            Ok(n) => {
-                if let Some(total) = self.0.checked_add(n) {
-                    Word(total)
-                } else {
-                    panic!("arithmetic overflow in word addition");
-                }
+#[derive(Debug, Copy, Clone)]
+pub enum BadInstructionKind {
+    BadOp(BadOpcode),
+    BadAddrMode(BadAddressingMode),
+}
+
+impl Display for BadInstructionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BadInstructionKind::BadOp(opcode) => write!(f, "{}", opcode),
+            BadInstructionKind::BadAddrMode(mode) => write!(f, "{}", mode),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct BadInstruction {
+    kind: BadInstructionKind,
+    instruction: Word,
+}
+
+impl Display for BadInstruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "bad instruction {}: {}", &self.instruction, &self.kind)
+    }
+}
+
+impl std::error::Error for BadInstruction {}
+
+#[derive(Clone, Copy, Debug)]
+pub enum InputOutputError {
+    NoInput,
+}
+
+impl Display for InputOutputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InputOutputError::NoInput => f.write_str("ran out of input"),
+        }
+    }
+}
+
+impl std::error::Error for InputOutputError {}
+
+#[derive(Clone, Copy, Debug)]
+pub enum CpuFault {
+    Overflow,
+    InvalidInstruction(BadInstruction),
+    MemoryFault,
+    AddressingModeNotValidInContext,
+    IOError(InputOutputError),
+}
+
+impl From<BadInstruction> for CpuFault {
+    fn from(bi: BadInstruction) -> Self {
+        CpuFault::InvalidInstruction(bi)
+    }
+}
+
+impl Display for CpuFault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CpuFault::Overflow => f.write_str("arithmetic overflow"),
+            CpuFault::InvalidInstruction(bi) => write!(f, "{}", bi),
+            CpuFault::MemoryFault => write!(f, "memory fault"),
+            CpuFault::AddressingModeNotValidInContext => {
+                f.write_str("addressing mode not valid in context")
             }
-            Err(_) => {
-                panic!(
-                    "cannot add {} to {} as {} does not fit into i64",
-                    rhs, self.0, rhs
-                );
+            CpuFault::IOError(e) => {
+                write!(f, "I/O error: {}", e)
             }
         }
     }
 }
 
-impl Add for Word {
-    type Output = Word;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        self + rhs.0
-    }
-}
-
-impl Mul for Word {
-    type Output = Word;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Word(self.0 * rhs.0)
-    }
-}
+impl std::error::Error for CpuFault {}
 
 impl TryFrom<Word> for usize {
     type Error = TryFromIntError;
@@ -105,7 +184,7 @@ enum Opcode {
     Stop = 99, // day 2
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct BadOpcode {
     code: i64,
 }
@@ -143,48 +222,6 @@ struct DecodedInstruction {
     op: Opcode,
     addressing_modes: [AddressingMode; NUM_PARAMS],
 }
-
-#[derive(Debug)]
-pub struct BadAddressingMode {
-    mode: i64,
-}
-
-impl Display for BadAddressingMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bad parameter mode {}", self.mode)
-    }
-}
-
-impl std::error::Error for BadAddressingMode {}
-
-#[derive(Debug)]
-pub enum BadInstructionKind {
-    BadOp(BadOpcode),
-    BadAddrMode(BadAddressingMode),
-}
-
-impl Display for BadInstructionKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BadInstructionKind::BadOp(opcode) => write!(f, "{}", opcode),
-            BadInstructionKind::BadAddrMode(mode) => write!(f, "{}", mode),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BadInstruction {
-    kind: BadInstructionKind,
-    instruction: Word,
-}
-
-impl Display for BadInstruction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bad instruction {}: {}", &self.instruction, &self.kind)
-    }
-}
-
-impl std::error::Error for BadInstruction {}
 
 impl TryFrom<&i64> for AddressingMode {
     type Error = BadAddressingMode;
@@ -261,30 +298,31 @@ impl Memory {
         }
     }
 
-    fn pos(addr: Word) -> usize {
-        match addr.0.try_into() {
-            Ok(a) => a,
-            Err(e) => {
-                panic!("invalid address {}: {}", addr.0, e);
-            }
+    fn pos(addr: Word) -> Result<usize, CpuFault> {
+        if let Ok(a) = addr.0.try_into() {
+            Ok(a)
+        } else {
+            Err(CpuFault::MemoryFault)
         }
     }
 
-    pub fn fetch(&self, addr: Word) -> Word {
-        let addr: usize = Memory::pos(addr);
-        *self.content.get(addr).unwrap_or(&Word(0))
+    pub fn fetch(&self, addr: Word) -> Result<Word, CpuFault> {
+        let addr: usize = Memory::pos(addr)?;
+        Ok(*self.content.get(addr).unwrap_or(&Word(0)))
     }
 
-    pub fn store(&mut self, addr: Word, value: Word) {
-        self.extend_to_include(addr);
-        let addr: usize = Memory::pos(addr);
+    pub fn store(&mut self, addr: Word, value: Word) -> Result<(), CpuFault> {
+        self.extend_to_include(addr)?;
+        let addr: usize = Memory::pos(addr)?;
         self.content[addr] = value;
+        Ok(())
     }
 
-    pub fn load(&mut self, base: Word, program: &[Word]) {
+    pub fn load(&mut self, base: Word, program: &[Word]) -> Result<(), CpuFault> {
         self.content.clear();
-        self.extend_to_include(base);
+        self.extend_to_include(base)?;
         self.content.extend(program);
+        Ok(())
     }
 
     pub fn dump(&self, dest: &mut Vec<Word>) {
@@ -292,17 +330,14 @@ impl Memory {
         dest.extend(&self.content);
     }
 
-    pub fn extend_to_include(&mut self, addr: Word) {
+    pub fn extend_to_include(&mut self, addr: Word) -> Result<(), CpuFault> {
         match addr.try_into() {
             Ok(n) if self.content.len() < n => {
                 self.content.resize(n, Word(0));
+                Ok(())
             }
-            Ok(_) => {
-                // Nothing to do.
-            }
-            Err(e) => {
-                panic!("extend_to_include: invalid location {}: {}", addr.0, e);
-            }
+            Ok(_) => Ok(()),
+            Err(_) => Err(CpuFault::Overflow),
         }
     }
 }
@@ -322,94 +357,110 @@ impl Processor {
         }
     }
 
-    fn update_relative_base(&mut self, delta: Word) {
+    fn update_relative_base(&mut self, delta: Word) -> Result<(), CpuFault> {
         if let Some(updated) = self.relative_base.checked_add(delta.0) {
             self.relative_base = updated;
+            Ok(())
         } else {
-            panic!("i64 overflow in update_relative_base");
+            Err(CpuFault::Overflow)
         }
     }
 
-    fn set_pc(&mut self, addr: Word) {
+    pub fn set_pc(&mut self, addr: Word) {
         self.pc = addr;
     }
 
-    fn execute_arithmetic_instruction<F: Fn(Word, Word) -> Word>(
+    fn execute_arithmetic_instruction<F: Fn(Word, Word) -> Result<Word, CpuFault>>(
         &mut self,
         modes: &[AddressingMode; NUM_PARAMS],
         calculate: F,
-    ) {
-        let result = calculate(self.get(modes, 1), self.get(modes, 2));
-        self.put(modes, 3, result);
+    ) -> Result<(), CpuFault> {
+        match calculate(self.get(modes, 1)?, self.get(modes, 2)?) {
+            Ok(result) => {
+                self.put(modes, 3, result)?;
+                Ok(())
+            }
+            Err(fault) => Err(fault),
+        }
     }
 
     pub fn execute_instruction<FI, FO>(
         &mut self,
         get_input: &mut FI,
         do_output: &mut FO,
-    ) -> Result<CpuStatus, BadInstruction>
+    ) -> Result<CpuStatus, CpuFault>
     where
-        FI: FnMut() -> Word,
-        FO: FnMut(Word),
+        FI: FnMut() -> Result<Word, InputOutputError>,
+        FO: FnMut(Word) -> Result<(), InputOutputError>,
     {
-        let instruction = self.ram.fetch(self.pc);
+        let instruction = self.ram.fetch(self.pc)?;
         let decoded = decode(instruction)?;
         let (state, next_pc) = match decoded.op {
             Opcode::Add => {
-                self.execute_arithmetic_instruction(&decoded.addressing_modes, |a, b| a + b);
-                (CpuStatus::Run, self.pc + 4_i64)
+                self.execute_arithmetic_instruction(&decoded.addressing_modes, add)?;
+
+                (CpuStatus::Run, self.pc.checked_add(&Word(4_i64))?)
             }
             Opcode::Multiply => {
-                self.execute_arithmetic_instruction(&decoded.addressing_modes, |a, b| a * b);
-                (CpuStatus::Run, self.pc + 4_i64)
+                self.execute_arithmetic_instruction(&decoded.addressing_modes, mul)?;
+                (CpuStatus::Run, self.pc.checked_add(&Word(4_i64))?)
             }
-            Opcode::Read => {
-                let input = get_input();
-                self.put(&decoded.addressing_modes, 1, input);
-                (CpuStatus::Run, self.pc + 2_i64)
-            }
+            Opcode::Read => match get_input() {
+                Ok(input) => {
+                    self.put(&decoded.addressing_modes, 1, input)?;
+                    (CpuStatus::Run, self.pc.checked_add(&Word(2_i64))?)
+                }
+                Err(e) => {
+                    return Err(CpuFault::IOError(e));
+                }
+            },
             Opcode::Write => {
-                do_output(self.get(&decoded.addressing_modes, 1));
-                (CpuStatus::Run, self.pc + 2_i64)
+                let output = self.get(&decoded.addressing_modes, 1)?;
+                match do_output(output) {
+                    Ok(()) => (CpuStatus::Run, self.pc.checked_add(&Word(2_i64))?),
+                    Err(e) => {
+                        return Err(CpuFault::IOError(e));
+                    }
+                }
             }
             Opcode::JumpTrue => {
-                let val: Word = self.get(&decoded.addressing_modes, 1);
+                let val: Word = self.get(&decoded.addressing_modes, 1)?;
                 let next_pc = if val.0 != 0 {
-                    self.get(&decoded.addressing_modes, 2)
+                    self.get(&decoded.addressing_modes, 2)?
                 } else {
-                    self.pc + 3_i64
+                    self.pc.checked_add(&Word(3_i64))?
                 };
                 (CpuStatus::Run, next_pc)
             }
             Opcode::JumpFalse => {
-                let val: Word = self.get(&decoded.addressing_modes, 1);
+                let val: Word = self.get(&decoded.addressing_modes, 1)?;
                 let next_pc = if val.0 == 0 {
-                    self.get(&decoded.addressing_modes, 2)
+                    self.get(&decoded.addressing_modes, 2)?
                 } else {
-                    self.pc + 3_i64
+                    self.pc.checked_add(&Word(3_i64))?
                 };
                 (CpuStatus::Run, next_pc)
             }
             Opcode::CmpLess => {
-                let less: bool =
-                    self.get(&decoded.addressing_modes, 1) < self.get(&decoded.addressing_modes, 2);
-                self.put(&decoded.addressing_modes, 3, Word(if less { 1 } else { 0 }));
-                (CpuStatus::Run, self.pc + 4_i64)
+                let less: bool = self.get(&decoded.addressing_modes, 1)?
+                    < self.get(&decoded.addressing_modes, 2)?;
+                self.put(&decoded.addressing_modes, 3, Word(if less { 1 } else { 0 }))?;
+                (CpuStatus::Run, self.pc.checked_add(&Word(4_i64))?)
             }
             Opcode::CmpEq => {
-                let equal: bool = self.get(&decoded.addressing_modes, 1)
-                    == self.get(&decoded.addressing_modes, 2);
+                let equal: bool = self.get(&decoded.addressing_modes, 1)?
+                    == self.get(&decoded.addressing_modes, 2)?;
                 self.put(
                     &decoded.addressing_modes,
                     3,
                     Word(if equal { 1 } else { 0 }),
-                );
-                (CpuStatus::Run, self.pc + 4_i64)
+                )?;
+                (CpuStatus::Run, self.pc.checked_add(&Word(4_i64))?)
             }
             Opcode::DeltaRelBase => {
-                let base = self.get(&decoded.addressing_modes, 1);
-                self.update_relative_base(base);
-                (CpuStatus::Run, self.pc + 2_i64)
+                let base = self.get(&decoded.addressing_modes, 1)?;
+                self.update_relative_base(base)?;
+                (CpuStatus::Run, self.pc.checked_add(&Word(2_i64))?)
             }
             Opcode::Stop => (CpuStatus::Halt, self.pc),
         };
@@ -417,26 +468,45 @@ impl Processor {
         Ok(state)
     }
 
-    fn get(&mut self, modes: &[AddressingMode; NUM_PARAMS], index: usize) -> Word {
+    fn get(
+        &mut self,
+        modes: &[AddressingMode; NUM_PARAMS],
+        index: usize,
+    ) -> Result<Word, CpuFault> {
         assert!(matches!(index, 1 | 2 | 3));
+        let fetch_loc: Word = self.pc.checked_add_usize(&index)?;
         match modes[index] {
-            AddressingMode::POSITIONAL => self.ram.fetch(self.ram.fetch(self.pc + index)),
-            AddressingMode::IMMEDIATE => self.ram.fetch(self.pc + index),
-            AddressingMode::RELATIVE => self
-                .ram
-                .fetch(self.ram.fetch(self.pc + index) + self.relative_base),
+            AddressingMode::POSITIONAL => Ok(self.ram.fetch(self.ram.fetch(fetch_loc)?)?),
+            AddressingMode::IMMEDIATE => Ok(self.ram.fetch(fetch_loc)?),
+            AddressingMode::RELATIVE => {
+                let base: Word = Word(self.relative_base);
+                let offset = self.ram.fetch(fetch_loc)?;
+                let rel_loc: Word = offset.checked_add(&base)?;
+                Ok(self.ram.fetch(rel_loc)?)
+            }
         }
     }
 
-    fn put(&mut self, modes: &[AddressingMode; NUM_PARAMS], index: usize, value: Word) {
+    fn put(
+        &mut self,
+        modes: &[AddressingMode; NUM_PARAMS],
+        index: usize,
+        value: Word,
+    ) -> Result<(), CpuFault> {
         assert!(matches!(index, 1 | 2 | 3));
-        let fetch_loc = self.pc + index;
+        let fetch_loc = self.pc.checked_add_usize(&index)?;
         let store_loc = match modes[index] {
-            AddressingMode::POSITIONAL => self.ram.fetch(fetch_loc),
-            AddressingMode::RELATIVE => self.ram.fetch(fetch_loc) + self.relative_base,
-            _ => panic!("Immediate addressing mode invalid for store operations"),
+            AddressingMode::POSITIONAL => self.ram.fetch(fetch_loc)?,
+            AddressingMode::RELATIVE => self
+                .ram
+                .fetch(fetch_loc)?
+                .checked_add(&Word(self.relative_base))?,
+            AddressingMode::IMMEDIATE => {
+                return Err(CpuFault::AddressingModeNotValidInContext);
+            }
         };
-        self.ram.store(store_loc, value);
+        self.ram.store(store_loc, value)?;
+        Ok(())
     }
 
     pub fn ram(&self) -> Vec<Word> {
@@ -445,18 +515,18 @@ impl Processor {
         result
     }
 
-    pub fn load(&mut self, base: Word, content: &[Word]) {
-        self.ram.load(base, content);
+    pub fn load(&mut self, base: Word, content: &[Word]) -> Result<(), CpuFault> {
+        self.ram.load(base, content)
     }
 
     pub fn run_with_io<FI, FO>(
         &mut self,
         get_input: &mut FI,
         do_output: &mut FO,
-    ) -> Result<(), BadInstruction>
+    ) -> Result<(), CpuFault>
     where
-        FI: FnMut() -> Word,
-        FO: FnMut(Word),
+        FI: FnMut() -> Result<Word, InputOutputError>,
+        FO: FnMut(Word) -> Result<(), InputOutputError>,
     {
         while self.execute_instruction(get_input, do_output)? == CpuStatus::Run {
             // No need to do anything in the body.
@@ -468,16 +538,16 @@ impl Processor {
         &mut self,
         fixed_input: &[Word],
         mut do_output: FO,
-    ) -> Result<(), BadInstruction>
+    ) -> Result<(), CpuFault>
     where
-        FO: Fn(Word) + Copy,
+        FO: Fn(Word) -> Result<(), InputOutputError>,
     {
         let mut it = fixed_input.iter();
-        let mut get_input = || -> Word {
+        let mut get_input = || -> Result<Word, InputOutputError> {
             if let Some(val) = it.next() {
-                *val
+                Ok(*val)
             } else {
-                panic!("run_with_fixed_input: ran out of input")
+                Err(InputOutputError::NoInput) // no input available
             }
         };
         loop {
@@ -519,11 +589,11 @@ fn check_program(program: &[i64], input: &[i64], expected_ram: &[i64], expected_
     let w_expected_output: Vec<Word> = expected_output.iter().map(w).collect();
 
     let mut it = w_input.iter();
-    let mut get_input = || -> Word {
+    let mut get_input = || -> Result<Word, InputOutputError> {
         if let Some(val) = it.next() {
-            *val
+            Ok(*val)
         } else {
-            panic!("run_with_fixed_input: ran out of input")
+            Err(InputOutputError::NoInput)
         }
     };
     let mut output = Vec::new();
@@ -559,5 +629,4 @@ fn test_cpu() {
         &[1, 1, 1, 4, 99, 5, 6, 0, 99],
         &[30, 1, 1, 4, 2, 5, 6, 0, 99],
     ); // from day 2
-    panic!("just testing");
 }
