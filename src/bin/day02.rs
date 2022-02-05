@@ -12,9 +12,9 @@ fn run_program(program: &[Word], noun: Word, verb: Word) -> Word {
     let mut cpu = Processor::new(Word(0));
     cpu.load(Word(0), &modified_program)
         .expect("load base address should be valid");
-    let discard_output = |_| -> Result<(), InputOutputError> { Ok(()) };
+    let mut discard_output = |_| -> Result<(), InputOutputError> { Ok(()) };
     let no_input = Vec::new();
-    if let Err(e) = cpu.run_with_fixed_input(&no_input, discard_output) {
+    if let Err(e) = cpu.run_with_fixed_input(&no_input, &mut discard_output) {
         panic!("program should be valid: {:?}", e);
     }
     let ram = cpu.ram();

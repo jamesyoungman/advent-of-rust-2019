@@ -537,10 +537,10 @@ impl Processor {
     pub fn run_with_fixed_input<FO>(
         &mut self,
         fixed_input: &[Word],
-        mut do_output: FO,
+        do_output: &mut FO,
     ) -> Result<(), CpuFault>
     where
-        FO: Fn(Word) -> Result<(), InputOutputError>,
+        FO: FnMut(Word) -> Result<(), InputOutputError>,
     {
         let mut it = fixed_input.iter();
         let mut get_input = || -> Result<Word, InputOutputError> {
@@ -551,7 +551,7 @@ impl Processor {
             }
         };
         loop {
-            match self.execute_instruction(&mut get_input, &mut do_output) {
+            match self.execute_instruction(&mut get_input, do_output) {
                 Ok(CpuStatus::Run) => (),
                 Ok(CpuStatus::Halt) => {
                     return Ok(());
