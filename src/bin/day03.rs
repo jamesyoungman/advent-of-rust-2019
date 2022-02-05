@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::io;
 use std::io::BufRead;
@@ -76,13 +76,19 @@ impl TryFrom<&str> for Move {
     }
 }
 
-fn add_move(mut current: Point, this_move: &Move, path: &mut HashSet<Point>) -> Point {
+fn add_move(
+    mut current: Point,
+    this_move: &Move,
+    dist: &mut u32,
+    path: &mut HashMap<Point, u32>,
+) -> Point {
     let origin = Point::origin();
     for _ in 0..this_move.distance {
         if current != origin {
-            path.insert(current);
+            path.insert(current, *dist);
         }
-        current = current.advance_in_direction(&this_move);
+        *dist += 1;
+        current = current.advance_in_direction(this_move);
     }
     current
 }
@@ -93,6 +99,8 @@ struct Figure {
 
 impl Figure {
     const PORT: Point = Point::origin();
+
+    #[cfg(test)]
     fn new() -> Figure {
         let mut symbols = HashMap::new();
         symbols.insert(Self::PORT, 'o');
@@ -140,12 +148,12 @@ impl Figure {
                 i == 0,
                 &mut self.symbols,
             );
-            current = current.advance_in_direction(&m);
+            current = current.advance_in_direction(m);
         }
     }
 
-    fn add_intersections(&mut self, intersections: &HashSet<Point>) {
-        for point in intersections.iter() {
+    fn add_intersections<T>(&mut self, intersections: &HashMap<Point, T>) {
+        for point in intersections.keys() {
             if point != &Self::PORT {
                 self.symbols.insert(*point, 'X');
             }
@@ -177,36 +185,70 @@ impl Display for Figure {
     }
 }
 
-fn make_path(start: &Point, moves: &[Move], fig: &mut Option<Figure>) -> HashSet<Point> {
-    let mut result = HashSet::new();
-    let mut current = start.clone();
+fn make_path(start: &Point, moves: &[Move], fig: &mut Option<Figure>) -> HashMap<Point, u32> {
+    let mut result = HashMap::new();
+    let mut current = *start;
+    let mut dist: u32 = 0;
     for this_move in moves {
         if let Some(figure) = fig {
             figure.add_move(current, this_move);
         }
-        current = add_move(current, this_move, &mut result);
+        current = add_move(current, this_move, &mut dist, &mut result);
     }
     result
 }
 
-fn solve1(first_path: &[Move], second_path: &[Move], fig: &mut Option<Figure>) -> Option<i32> {
+fn intersect_paths(
+    first_path: &HashMap<Point, u32>,
+    second_path: &HashMap<Point, u32>,
+) -> HashMap<Point, u32> {
+    let mut result = HashMap::new();
+    for (p, first_dist) in first_path.iter() {
+        if let Some(second_dist) = second_path.get(p) {
+            let total = first_dist + second_dist;
+            result.insert(*p, total);
+        }
+    }
+    result
+}
+
+fn solve<F>(
+    first_path: &[Move],
+    second_path: &[Move],
+    fig: &mut Option<Figure>,
+    weight: F,
+) -> Option<u32>
+where
+    F: Fn((&Point, &u32)) -> u32,
+{
     let origin = Point::origin();
     let path1 = make_path(&origin, first_path, fig);
     let path2 = make_path(&origin, second_path, fig);
-    let intersections = path1.intersection(&path2).cloned().collect();
+    let intersections: HashMap<Point, u32> = intersect_paths(&path1, &path2);
     if let Some(figure) = fig {
         figure.add_intersections(&intersections);
         println!("{}", &figure)
     }
-    intersections
-        .iter()
-        .map(|p| p.manhattan_from_origin())
-        .min()
+    intersections.iter().map(weight).min()
+}
+
+fn solve1(first_path: &[Move], second_path: &[Move], fig: &mut Option<Figure>) -> Option<u32> {
+    fn manhattan(x: (&Point, &u32)) -> u32 {
+        x.0.manhattan_from_origin() as u32
+    }
+    solve(first_path, second_path, fig, manhattan)
+}
+
+fn solve2(first_path: &[Move], second_path: &[Move], fig: &mut Option<Figure>) -> Option<u32> {
+    fn shortest(x: (&Point, &u32)) -> u32 {
+        *x.1
+    }
+    solve(first_path, second_path, fig, shortest)
 }
 
 #[test]
 fn test_solve1() {
-    fn check_solution(first: &str, second: &str, expected_dist: i32) {
+    fn check_solution(first: &str, second: &str, expected_dist: u32) {
         let m1: Vec<Move> = string_to_moves(first).expect("first test input should be valid");
         let m2: Vec<Move> = string_to_moves(second).expect("second test input should be valid");
         let mut fig: Option<Figure> = Some(Figure::new());
@@ -238,7 +280,7 @@ fn test_solve1() {
 
 fn part1(lines: &[Vec<Move>], figure: &mut Option<Figure>) {
     match lines {
-        [first, second] => match solve1(&first, &second, figure) {
+        [first, second] => match solve1(first, second, figure) {
             Some(d) => {
                 println!(
                     "Day 2 part 1: manhattan distance of closest intersection is {}",
@@ -247,6 +289,25 @@ fn part1(lines: &[Vec<Move>], figure: &mut Option<Figure>) {
             }
             None => {
                 println!("Day 2 part 1: no solution, paths do not intersect");
+            }
+        },
+        _ => {
+            panic!("expected 2 paths, got {}", lines.len());
+        }
+    }
+}
+
+fn part2(lines: &[Vec<Move>], figure: &mut Option<Figure>) {
+    match lines {
+        [first, second] => match solve2(first, second, figure) {
+            Some(d) => {
+                println!(
+                    "Day 2 part 2: signal distance of closest intersection is {}",
+                    d
+                );
+            }
+            None => {
+                println!("Day 2 part 2: no solution, paths do not intersect");
             }
         },
         _ => {
@@ -267,4 +328,5 @@ fn main() {
         })
         .collect();
     part1(&wires, &mut None);
+    part2(&wires, &mut None);
 }
