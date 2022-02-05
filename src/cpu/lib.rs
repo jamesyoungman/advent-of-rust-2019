@@ -597,12 +597,14 @@ fn check_program(program: &[i64], input: &[i64], expected_ram: &[i64], expected_
         }
     };
     let mut output = Vec::new();
-    let mut do_output = |w: Word| {
+    let mut do_output = |w: Word| -> Result<(), InputOutputError> {
         output.push(w);
+        Ok(())
     };
 
     let mut cpu = Processor::new(Word(0));
-    cpu.load(Word(0), &w_program);
+    cpu.load(Word(0), &w_program)
+        .expect("0 should be a valid load address");
     println!("Loaded {}-word program", w_program.len());
     if let Err(e) = cpu.run_with_io(&mut get_input, &mut do_output) {
         panic!("test program contains a bad instruction: {}", e);
