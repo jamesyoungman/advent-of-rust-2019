@@ -143,14 +143,12 @@ impl Amplifier {
         assert!(self.running);
         let mut the_output: Option<Word> = None;
         let mut do_output = |w: Word| -> Result<(), InputOutputError> {
-            println!("output {} generated", w.0);
             the_output = Some(w);
             Ok(())
         };
         let mut the_input: Option<Word> = Some(input);
         let mut do_input = || {
             if let Some(val) = the_input.take() {
-                println!("input {} consumed", val.0);
                 Ok(val)
             } else {
                 Err(InputOutputError::NoInput)
@@ -194,55 +192,30 @@ fn run_amplifier_loop(
     let num_amplifiers = amplifiers.len();
     let mut maybe_phases: Vec<Option<Word>> = phases.iter().map(|w| Some(*w)).collect();
     loop {
-        let runners = amplifiers.iter().filter(|amp| amp.running).count();
-        println!("{} amplifiers are running", runners);
-        if runners == 0 {
-            panic!("Ran out of amplifiers");
-        }
         for (i, amp) in amplifiers
             .iter_mut()
             .enumerate()
             .filter(|(_, amp)| amp.running)
         {
             let mut input: Option<Word> = match maybe_phases[i].take() {
-                Some(phase) => {
-                    println!("Amplifier {}'s input is its phase, {}", i, phase);
-                    Some(phase)
-                }
+                Some(phase) => Some(phase),
                 None => wires[i].take(),
             };
             if let Some(input) = input.take() {
-                println!("Amplifier {} gets input {}", i, input.0);
                 match amp.run_until_output(input) {
                     Ok(Some(output)) => {
                         let dest = (i + 1) % num_wires;
-                        println!(
-                            "Amplifier {} produced output {} to feed to {}",
-                            i, output.0, dest
-                        );
                         wires[dest] = Some(output);
                     }
-                    Ok(None) if !amp.running => {
-                        println!("Amplifier {} has halted", i);
-                    }
-                    Ok(None) => {
-                        println!("Amplifier {} needs input", i);
-                    }
+                    Ok(None) => (),
                     Err(e) => {
                         return Err(e);
                     }
                 }
                 if !amp.running {
                     total_halted += 1;
-                    println!("Amplifier {} has halted; {} amplifiers altogether have halted, {} were previously running",
-				             i, total_halted, runners);
                     if total_halted == num_amplifiers {
-                        println!(
-                            "The last amplifier ({}) has stopped, extracting the thruster input",
-                            i
-                        );
                         if let Some(thruster_input) = wires[0].take() {
-                            println!("Thruster input is {}", thruster_input);
                             return Ok(thruster_input);
                         } else {
                             panic!("No thruster input is available");
