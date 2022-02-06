@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 itertools = "0.10"
+ndarray = "0.15"
 
 [lib]
 name = "cpu"
@@ -26,3 +27,5 @@ name = "day05"
 name = "day06"
 [[bin]]
 name = "day07"
+[[bin]]
+name = "day08"
