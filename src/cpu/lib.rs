@@ -1,11 +1,13 @@
-use std::fmt::Display;
+use std::cmp::max;
+use std::collections::BTreeMap;
+use std::fmt::{Debug, Display};
 use std::io;
 use std::io::BufRead;
 use std::num::{ParseIntError, TryFromIntError};
 
 pub const NUM_PARAMS: usize = 4;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Eq, Hash)]
 pub struct Word(pub i64);
 
 impl Word {
@@ -47,7 +49,13 @@ fn mul(a: Word, b: Word) -> Result<Word, CpuFault> {
 
 impl Display for Word {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+        std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl Debug for Word {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self.0, f)
     }
 }
 
@@ -83,6 +91,7 @@ impl Display for BadInstructionKind {
 pub struct BadInstruction {
     kind: BadInstructionKind,
     instruction: Word,
+    address: Option<Word>,
 }
 
 impl Display for BadInstruction {
@@ -166,12 +175,20 @@ impl PartialOrd for Word {
     }
 }
 
+impl Ord for Word {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum AddressingMode {
     POSITIONAL,
     IMMEDIATE,
     RELATIVE,
 }
 
+#[derive(Debug)]
 enum Opcode {
     Add = 1,       // day 2
     Multiply = 2,  // day 2
@@ -219,6 +236,7 @@ impl TryFrom<&Word> for Opcode {
     }
 }
 
+#[derive(Debug)]
 struct DecodedInstruction {
     op: Opcode,
     addressing_modes: [AddressingMode; NUM_PARAMS],
@@ -258,12 +276,14 @@ impl TryFrom<&Word> for DecodedInstruction {
 
     fn try_from(instruction: &Word) -> Result<Self, Self::Error> {
         let op: Opcode = instruction.try_into().map_err(|e| BadInstruction {
-            instruction: *instruction,
             kind: BadInstructionKind::BadOp(e),
+            instruction: *instruction,
+            address: None,
         })?;
         let addressing_modes = getmodes(&instruction.0).map_err(|e| BadInstruction {
             instruction: *instruction,
             kind: BadInstructionKind::BadAddrMode(e),
+            address: None,
         })?;
         Ok(DecodedInstruction {
             op,
@@ -272,8 +292,14 @@ impl TryFrom<&Word> for DecodedInstruction {
     }
 }
 
-fn decode(insruction: Word) -> Result<DecodedInstruction, BadInstruction> {
-    (&insruction).try_into()
+fn decode(insruction: Word, pc: Word) -> Result<DecodedInstruction, BadInstruction> {
+    match (&insruction).try_into() {
+        Ok(d) => Ok(d),
+        Err(mut e) => {
+            e.address = Some(pc);
+            Err(e)
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -282,8 +308,10 @@ pub enum CpuStatus {
     Run,
 }
 
+#[derive(Debug)]
 pub struct Memory {
-    content: Vec<Word>,
+    content: BTreeMap<Word, Word>,
+    top: i64,
 }
 
 impl Default for Memory {
@@ -295,54 +323,58 @@ impl Default for Memory {
 impl Memory {
     pub fn new() -> Memory {
         Memory {
-            content: Vec::new(),
+            content: BTreeMap::new(),
+            top: 0,
         }
     }
 
-    fn pos(addr: Word) -> Result<usize, CpuFault> {
-        if let Ok(a) = addr.0.try_into() {
-            Ok(a)
-        } else {
+    fn pos(addr: Word) -> Result<Word, CpuFault> {
+        if addr.0 < 0 {
             Err(CpuFault::MemoryFault)
+        } else {
+            Ok(addr)
         }
     }
 
     pub fn fetch(&self, addr: Word) -> Result<Word, CpuFault> {
-        let addr: usize = Memory::pos(addr)?;
-        Ok(*self.content.get(addr).unwrap_or(&Word(0)))
+        let addr = Memory::pos(addr)?;
+        Ok(*self.content.get(&addr).unwrap_or(&Word(0)))
     }
 
     pub fn store(&mut self, addr: Word, value: Word) -> Result<(), CpuFault> {
-        self.extend_to_include(addr)?;
-        let addr: usize = Memory::pos(addr)?;
-        self.content[addr] = value;
+        let addr = Memory::pos(addr)?;
+        self.content.insert(addr, value);
+        self.top = max(self.top, addr.0);
         Ok(())
     }
 
     pub fn load(&mut self, base: Word, program: &[Word]) -> Result<(), CpuFault> {
         self.content.clear();
-        self.extend_to_include(base)?;
-        self.content.extend(program);
+        let base: Word = Memory::pos(base)?;
+        for (offset, w) in program.iter().enumerate() {
+            let offset: Word = match offset.try_into() {
+                Ok(n) if n >= 0 => Word(n),
+                _ => {
+                    return Err(CpuFault::MemoryFault);
+                }
+            };
+            let addr = Word(base.0 + offset.0);
+            self.content.insert(addr, *w);
+            self.top = max(self.top, addr.0);
+        }
         Ok(())
     }
 
     pub fn dump(&self, dest: &mut Vec<Word>) {
         dest.clear();
-        dest.extend(&self.content);
-    }
-
-    pub fn extend_to_include(&mut self, addr: Word) -> Result<(), CpuFault> {
-        match addr.try_into() {
-            Ok(n) if self.content.len() < n => {
-                self.content.resize(n, Word(0));
-                Ok(())
-            }
-            Ok(_) => Ok(()),
-            Err(_) => Err(CpuFault::Overflow),
+        let zero: Word = Word(0);
+        if !self.content.is_empty() {
+            dest.extend((0..=self.top).map(|addr| self.content.get(&Word(addr)).unwrap_or(&zero)));
         }
     }
 }
 
+#[derive(Debug)]
 pub struct Processor {
     ram: Memory,
     relative_base: i64,
@@ -395,7 +427,8 @@ impl Processor {
         FO: FnMut(Word) -> Result<(), InputOutputError>,
     {
         let instruction = self.ram.fetch(self.pc)?;
-        let decoded = decode(instruction)?;
+        let decoded = decode(instruction, self.pc)?;
+        //println!("executing at {}: {:?}", &self.pc, &decoded);
         let (state, next_pc) = match decoded.op {
             Opcode::Add => {
                 self.execute_arithmetic_instruction(&decoded.addressing_modes, add)?;
@@ -408,6 +441,7 @@ impl Processor {
             }
             Opcode::Read => match get_input() {
                 Ok(input) => {
+                    //println!("input word was {}", &input.0);
                     self.put(&decoded.addressing_modes, 1, input)?;
                     (CpuStatus::Run, self.pc.checked_add(&Word(2_i64))?)
                 }
@@ -449,8 +483,10 @@ impl Processor {
                 (CpuStatus::Run, self.pc.checked_add(&Word(4_i64))?)
             }
             Opcode::CmpEq => {
-                let equal: bool = self.get(&decoded.addressing_modes, 1)?
-                    == self.get(&decoded.addressing_modes, 2)?;
+                let left: Word = self.get(&decoded.addressing_modes, 1)?;
+                let right: Word = self.get(&decoded.addressing_modes, 2)?;
+                let equal: bool = left == right;
+                //println!("CmpEq: {}=={}: {}", &left, &right, equal);
                 self.put(
                     &decoded.addressing_modes,
                     3,
@@ -634,6 +670,15 @@ fn test_cpu() {
     ); // from day 2
 }
 
+#[test]
+fn test_quine() {
+    // This test case is given as an example in day 9.
+    let quine = &[
+        109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99,
+    ];
+    check_program(quine, &[], quine, quine);
+}
+
 #[derive(Debug)]
 pub enum ProgramLoadError {
     ReadFailed(std::io::Error),
@@ -663,7 +708,7 @@ pub fn read_program_from_stdin() -> Result<Vec<Word>, ProgramLoadError> {
                 return Err(ProgramLoadError::ReadFailed(e));
             }
             Ok(line) => {
-                for field in line.split(',') {
+                for field in line.trim().split(',') {
                     match field.parse::<i64>() {
                         Ok(n) => {
                             words.push(Word(n));
