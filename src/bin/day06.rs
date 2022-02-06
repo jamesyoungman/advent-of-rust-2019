@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::io::BufRead;
 
@@ -12,33 +11,17 @@ fn string_to_oribit(s: &str) -> (String, String) {
     }
 }
 
-fn build_tree(
-    orbits: &[(String, String)],
-) -> (
-    Vec<String>,
-    HashMap<String, String>,
-    HashMap<String, Vec<String>>,
-    HashSet<String>,
-) {
+fn build_tree(orbits: &[(String, String)]) -> (HashMap<String, String>, HashSet<String>) {
     let mut all_bodies: HashSet<String> = HashSet::new();
     let mut parent_of: HashMap<String, String> = HashMap::new();
-    let mut children_of: HashMap<String, Vec<String>> = HashMap::new();
     for (parent_name, child_name) in orbits {
         parent_of.insert(child_name.to_string(), parent_name.to_string());
-        children_of
-            .entry(parent_name.to_string())
-            .or_insert_with(Vec::new)
-            .push(child_name.to_string());
     }
-    let mut non_orbiters: Vec<String> = Vec::new();
     for (parent, child) in orbits {
-        if !parent_of.contains_key(parent) {
-            non_orbiters.push(parent.to_string());
-        }
         all_bodies.insert(parent.to_string());
         all_bodies.insert(child.to_string());
     }
-    (non_orbiters, parent_of, children_of, all_bodies)
+    (parent_of, all_bodies)
 }
 
 fn count_orbits(parent_of: &HashMap<String, String>, all_bodies: &HashSet<String>) -> usize {
@@ -54,24 +37,88 @@ fn count_orbits(parent_of: &HashMap<String, String>, all_bodies: &HashSet<String
         .sum()
 }
 
-fn solve(orbits: &[(String, String)]) -> usize {
-    let (_non_orbiters, parent_of, _children_of, all_bodies) = build_tree(orbits);
-    count_orbits(&parent_of, &all_bodies)
-}
-
 #[test]
-fn test_solve() {
+fn test_count_orbits() {
     let test_input: Vec<&str> = vec![
         "COM)B", "B)C", "C)D", "D)E", "E)F", "B)G", "G)H", "D)I", "E)J", "J)K", "K)L",
     ];
     let orbits: Vec<(String, String)> = test_input.iter().cloned().map(string_to_oribit).collect();
-    dbg!(&orbits);
-    assert_eq!(solve(&orbits), 42);
+    let (parent_of, all_bodies) = build_tree(&orbits);
+    assert_eq!(count_orbits(&parent_of, &all_bodies), 42);
 }
 
-fn part1(orbits: &[(String, String)]) {
-    let count = solve(orbits);
-    println!("Day 6 part 1: {} orbits", count);
+fn compute_transfer_counts(
+    mut who: String,
+    parent_of: &HashMap<String, String>,
+) -> HashMap<String, usize> {
+    let mut result: HashMap<String, usize> = HashMap::new();
+    let mut count: usize = 0;
+    loop {
+        match parent_of.get(&who) {
+            Some(p) => {
+                result.insert(p.to_string(), count);
+                count += 1;
+                who = p.to_string();
+            }
+            None => {
+                return result;
+            }
+        }
+    }
+}
+
+fn count_transfers(from: String, to: String, parent_of: &HashMap<String, String>) -> Option<usize> {
+    let transfers_to = compute_transfer_counts(from, parent_of);
+    let mut body = to;
+    let mut transfers: usize = 0;
+    loop {
+        match parent_of.get(&body) {
+            None => {
+                return None;
+            }
+            Some(p) => match transfers_to.get(p) {
+                None => {
+                    transfers += 1;
+                    body = p.to_string();
+                }
+                Some(n) => {
+                    return Some(n + transfers);
+                }
+            },
+        }
+    }
+}
+
+#[test]
+fn test_count_transfers() {
+    let test_input: Vec<&str> = vec![
+        "COM)B", "B)C", "C)D", "D)E", "E)F", "B)G", "G)H", "D)I", "E)J", "J)K", "K)L", "K)YOU",
+        "I)SAN",
+    ];
+    let orbits: Vec<(String, String)> = test_input.iter().cloned().map(string_to_oribit).collect();
+    let (parent_of, _all_bodies) = build_tree(&orbits);
+    assert_eq!(
+        count_transfers("YOU".to_string(), "SAN".to_string(), &parent_of),
+        Some(4)
+    );
+}
+
+fn part1(parent_of: &HashMap<String, String>, all_bodies: &HashSet<String>) {
+    println!(
+        "Day 6 part 1: {} orbits",
+        count_orbits(parent_of, all_bodies)
+    );
+}
+
+fn part2(parent_of: &HashMap<String, String>) {
+    match count_transfers("YOU".to_string(), "SAN".to_string(), parent_of) {
+        Some(n) => {
+            println!("Day 6 part 2: {} transfers", n);
+        }
+        None => {
+            println!("Day 6 part 2: no solution found");
+        }
+    }
 }
 
 fn main() {
@@ -79,5 +126,7 @@ fn main() {
         .lines()
         .map(|s| string_to_oribit(s.unwrap().as_str()))
         .collect();
-    part1(&orbits);
+    let (parent_of, all_bodies) = build_tree(&orbits);
+    part1(&parent_of, &all_bodies);
+    part2(&parent_of);
 }
