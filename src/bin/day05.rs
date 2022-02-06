@@ -1,9 +1,6 @@
-use std::io;
-use std::io::prelude::*;
-
-use cpu::InputOutputError;
-use cpu::Processor;
+use cpu::read_program_from_stdin;
 use cpu::Word;
+use cpu::{InputOutputError, Processor};
 
 fn run_program(program: &[Word], input_word: Word) -> Vec<Word> {
     let mut cpu = Processor::new(Word(0));
@@ -38,24 +35,13 @@ fn part2(program: &[Word]) {
 }
 
 fn main() {
-    let words: Vec<Word> = io::BufReader::new(io::stdin())
-        .lines()
-        .map(|line| line.expect("should be able to read the program"))
-        .flat_map(|s| {
-            let mut numbers: Vec<Word> = Vec::new();
-            for field in s.split(',') {
-                match field.parse::<i64>() {
-                    Ok(n) => {
-                        numbers.push(Word(n));
-                    }
-                    Err(e) => {
-                        panic!("invalid instruction {}: {}", field, e);
-                    }
-                }
-            }
-            numbers
-        })
-        .collect();
-    part1(&words);
-    part2(&words);
+    match read_program_from_stdin() {
+        Ok(words) => {
+            part1(&words);
+            part2(&words);
+        }
+        Err(e) => {
+            eprintln!("failed to load program: {}", e);
+        }
+    }
 }

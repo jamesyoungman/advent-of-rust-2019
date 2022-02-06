@@ -1,6 +1,7 @@
 use std::fmt::Display;
-
-use std::num::TryFromIntError;
+use std::io;
+use std::io::BufRead;
+use std::num::{ParseIntError, TryFromIntError};
 
 pub const NUM_PARAMS: usize = 4;
 
@@ -631,4 +632,49 @@ fn test_cpu() {
         &[1, 1, 1, 4, 99, 5, 6, 0, 99],
         &[30, 1, 1, 4, 2, 5, 6, 0, 99],
     ); // from day 2
+}
+
+#[derive(Debug)]
+pub enum ProgramLoadError {
+    ReadFailed(std::io::Error),
+    BadWord(String, ParseIntError),
+}
+
+impl Display for ProgramLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProgramLoadError::ReadFailed(e) => {
+                write!(f, "failed to read program: {}", e)
+            }
+            ProgramLoadError::BadWord(s, e) => {
+                write!(f, "program contained invalid word '{}': {}", s, e)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProgramLoadError {}
+
+pub fn read_program_from_stdin() -> Result<Vec<Word>, ProgramLoadError> {
+    let mut words: Vec<Word> = Vec::new();
+    for input_element in io::BufReader::new(io::stdin()).lines() {
+        match input_element {
+            Err(e) => {
+                return Err(ProgramLoadError::ReadFailed(e));
+            }
+            Ok(line) => {
+                for field in line.split(',') {
+                    match field.parse::<i64>() {
+                        Ok(n) => {
+                            words.push(Word(n));
+                        }
+                        Err(e) => {
+                            return Err(ProgramLoadError::BadWord(field.to_string(), e));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(words)
 }
