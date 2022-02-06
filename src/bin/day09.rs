@@ -28,7 +28,16 @@ fn part1(program: &[Word]) {
     }
 }
 
-fn part2(_program: &[Word]) {}
+fn part2(program: &[Word]) {
+    let mut output = run_program(program, Word(2)); // 2 is sensor boost mode.
+    if let Some(coordinates) = output.pop() {
+        println!(
+            "Day 9 part 2: Ceres distress signal coordinates {}",
+            coordinates
+        );
+    }
+    assert!(output.is_empty());
+}
 
 fn main() {
     match read_program_from_stdin() {

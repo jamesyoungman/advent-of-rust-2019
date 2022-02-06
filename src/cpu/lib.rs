@@ -7,7 +7,7 @@ use std::num::{ParseIntError, TryFromIntError};
 
 pub const NUM_PARAMS: usize = 4;
 
-#[derive(Clone, Copy, Eq, Hash)]
+#[derive(Clone, Copy, Eq)]
 pub struct Word(pub i64);
 
 impl Word {
