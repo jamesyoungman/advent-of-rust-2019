@@ -68,9 +68,36 @@ fn part1(layers: &[Array2<char>]) {
     println!("Day 8 part 1: {}", result);
 }
 
+fn part2(layers: &[Array2<char>], w: usize, h: usize) {
+    for row in 0..h {
+        for col in 0..w {
+            let pos = (row, col);
+            let ch: Option<char> = layers.iter().map(|layer| layer[pos]).find(|ch| *ch != '2');
+            match ch {
+                Some('1') => {
+                    print!("#"); // white
+                }
+                Some('0') => {
+                    print!(" "); // black
+                }
+                None => {
+                    print!("."); // transparent
+                }
+                Some(c) => {
+                    panic!("pixel colour is {}", c);
+                }
+            }
+        }
+        println!();
+    }
+}
+
 fn main() -> Result<(), Fail> {
-    let layers = parse_input(25, 6).map_err(Fail::BadInput)?;
+    const WIDTH: usize = 25;
+    const HEIGHT: usize = 6;
+    let layers = parse_input(WIDTH, HEIGHT).map_err(Fail::BadInput)?;
     println!("We have {} layers", layers.len());
     part1(&layers);
+    part2(&layers, WIDTH, HEIGHT);
     Ok(())
 }
