@@ -13,3 +13,13 @@ path = "src/cpu/lib.rs"
 
 [[bin]]
 name = "day01"
+[[bin]]
+name = "day02"
+[[bin]]
+name = "day03"
+[[bin]]
+name = "day04"
+[[bin]]
+name = "day05"
+[[bin]]
+name = "day06"
