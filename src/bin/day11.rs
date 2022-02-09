@@ -52,7 +52,6 @@ enum PaintColour {
 
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
 enum PaintStatus {
-    Unpainted,
     PaintedWhite,
     PaintedBlack,
 }
@@ -80,7 +79,7 @@ impl ShipSurface {
             PaintColour::White => PaintStatus::PaintedWhite,
             PaintColour::Black => PaintStatus::PaintedBlack,
         };
-        if let Some(PaintStatus::Unpainted) | None = self.panels.insert(location, new_state) {
+        if self.panels.insert(location, new_state).is_none() {
             self.total_painted_panels += 1;
         }
     }
