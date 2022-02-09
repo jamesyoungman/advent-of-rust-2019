@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::f64::consts::PI;
+use std::fmt::Display;
 use std::io::{self, Read};
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
@@ -32,6 +34,22 @@ impl Point {
         } else {
             r
         }
+    }
+
+    fn bearing(&self, to: &Point) -> f64 {
+        let dx: f64 = (to.x - self.x).into();
+        let dy: f64 = (to.y - self.y).into();
+        let mut rad = -1.0 * (-dy).atan2(dx) + (PI / 2.0);
+        if rad < 0.0 {
+            rad += 2.0 * PI;
+        }
+        radians_to_degrees(rad)
+    }
+}
+
+impl Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{},{}", self.x, self.y)
     }
 }
 
@@ -271,16 +289,179 @@ fn test_solve1() {
     );
 }
 
+fn radians_to_degrees(rad: f64) -> f64 {
+    180.0 * rad / PI
+}
+
+#[cfg(test)]
+fn is_close(a: f64, b: f64) -> bool {
+    (a - b).abs() < 1.0e-5
+}
+
+#[cfg(test)]
+fn check_radians_to_degrees(radians: f64, expected: f64) {
+    let got = radians_to_degrees(radians);
+    assert!(is_close(expected, got), "{} vs {}", expected, got);
+}
+
+#[cfg(test)]
+fn check_bearing_from(from: &Point, to: &Point, expected: f64) {
+    let got = from.bearing(to);
+    assert!(
+        is_close(got, expected),
+        "bearing of {} from {}: expected {}, got {}",
+        to,
+        from,
+        expected,
+        got
+    );
+}
+
+#[test]
+fn test_bearing() {
+    let base = Point { x: 5, y: 5 };
+    let examples = &[
+        Point { x: 5, y: 4 },
+        Point { x: 6, y: 4 },
+        Point { x: 6, y: 5 },
+        Point { x: 6, y: 6 },
+        Point { x: 5, y: 6 },
+        Point { x: 4, y: 6 },
+        Point { x: 4, y: 5 },
+    ];
+    for p in examples {
+        let b = base.bearing(p);
+        println!("Bearing from {} to {} is {}", base, p, b);
+    }
+
+    check_radians_to_degrees(0.0, 0.0);
+    check_radians_to_degrees(4.0 * PI / 9.0, 80.0);
+
+    check_bearing_from(&Point { x: 5, y: 5 }, &Point { x: 5, y: 4 }, 0.0);
+    check_bearing_from(&Point { x: 5, y: 5 }, &Point { x: 10, y: 5 }, 90.0);
+    check_bearing_from(&Point { x: 5, y: 5 }, &Point { x: 5, y: 10 }, 180.0);
+    check_bearing_from(&Point { x: 5, y: 5 }, &Point { x: 0, y: 5 }, 270.0);
+}
+
+fn order_by_reverse_distance(base: &Point, points: &mut Vec<Point>) {
+    // We already know tha the slopes of the line betwen base and a is the
+    // same as the slope of the line between base and b.  Hence to find the
+    // closer of a and b we can simply use the manhattan distance.
+    points
+        .sort_by(|a: &Point, b: &Point| -> Ordering { base.manhattan(b).cmp(&base.manhattan(a)) });
+}
+
+fn solve2(index: usize, base: &Point, asteroids: &AsteroidField) -> Option<Point> {
+    const BEARING_MULTIPLIER: f64 = 1.0e6;
+    let mut by_direction: BTreeMap<i64, Vec<Point>> = BTreeMap::new();
+    for asteroid in asteroids.asteroids.iter() {
+        if asteroid != base {
+            // The slope calculation is unfamiliar here because y=0 is at the top.
+            let b = base.bearing(asteroid);
+            println!(
+                "The angle in degrees between {} and {} is {}",
+                base, asteroid, b
+            );
+            let bi = (b * BEARING_MULTIPLIER).round() as i64;
+            by_direction
+                .entry(bi)
+                .or_insert_with(Vec::new)
+                .push(asteroid.clone());
+        }
+    }
+
+    for (_bearing, points) in by_direction.iter_mut() {
+        order_by_reverse_distance(base, points);
+        if points.len() > 1 {
+            print!("Order by distance (far to near) from {}:", base);
+            for p in points.iter() {
+                print!(" {}", p);
+            }
+            println!();
+        }
+    }
+
+    let mut zapped: usize = 0;
+    let total: usize = by_direction.values().map(|v| v.len()).sum();
+    if total < index {
+        println!(
+            "There can be no {}th asteroid beign zapped, as there are only {} asteroids",
+            index, total
+        );
+        return None;
+    }
+
+    println!("The monitoring station is at {}", base);
+    loop {
+        // The laser starts by pointing up.  So, iterate in order (so
+        // that we start at 0 ("up") and move clockwise).
+        for (bearing, asteroid_locations) in by_direction.iter_mut() {
+            println!(
+                "Aiming laser with slope {}",
+                (*bearing as f64) / BEARING_MULTIPLIER
+            );
+            if let Some(goner) = asteroid_locations.pop() {
+                zapped += 1;
+                println!("Zap asteroid {} at {}", zapped, goner);
+                if zapped == index {
+                    return Some(goner);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_solve2() {
+    let asteroids: AsteroidField = concat!(
+        ".#..##.###...#######\n",
+        "##.############..##.\n",
+        ".#.######.########.#\n",
+        ".###.#######.####.#.\n",
+        "#####.##.#.##.###.##\n",
+        "..#####..#.#########\n",
+        "####################\n",
+        "#.####....###.#.#.##\n",
+        "##.#################\n",
+        "#####.##.###..####..\n",
+        "..######..##.#######\n",
+        "####.##.####...##..#\n",
+        ".#####..#.######.###\n",
+        "##...#.##########...\n",
+        "#.##########.#######\n",
+        ".####.#.###.###.#.##\n",
+        "....##.##.###..#####\n",
+        ".#.#.###########.###\n",
+        "#.#.#.#####.####.###\n",
+        "###.##.####.##.#..##\n"
+    )
+    .into();
+    let base = Point { x: 11, y: 13 };
+    assert_eq!(Some(Point { x: 11, y: 12 }), solve2(1, &base, &asteroids));
+    assert_eq!(Some(Point { x: 8, y: 2 }), solve2(200, &base, &asteroids));
+    assert_eq!(Some(Point { x: 11, y: 1 }), solve2(299, &base, &asteroids));
+}
+
 fn run() -> Result<(), std::io::Error> {
     let field: AsteroidField = parse_input()?;
     match solve1(&field) {
         Some(solution) => {
             println!("Day 10 part 1: {:?}", &solution);
+
+            match solve2(200, &solution.p, &field) {
+                Some(asteroid) => {
+                    let answer = asteroid.x * 100 + asteroid.y;
+                    println!("Day 10 part 2: {}", answer);
+                }
+                None => {
+                    println!("Day 10 part 2: no solution found");
+                }
+            }
         }
         None => {
-            println!("Day 10 part 1: no solution found");
+            println!("Day 10 part 1: no solution found (so can't solve part 2 either)");
         }
-    }
+    };
     Ok(())
 }
 
