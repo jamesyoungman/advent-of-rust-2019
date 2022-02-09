@@ -175,8 +175,13 @@ fn perform_turn_and_move(
     Ok(())
 }
 
-fn run_robot(start: Panel, surface: &mut ShipSurface, program: &[Word]) -> Result<Panel, CpuFault> {
-    let panel_colour = Arc::new(Mutex::new(PaintColour::Black));
+fn run_robot(
+    start: Panel,
+    start_colour: PaintColour,
+    surface: &mut ShipSurface,
+    program: &[Word],
+) -> Result<Panel, CpuFault> {
+    let panel_colour = Arc::new(Mutex::new(start_colour));
 
     let mut get_input = || -> Result<Word, InputOutputError> {
         match *panel_colour.lock().unwrap() {
@@ -211,7 +216,7 @@ fn run_robot(start: Panel, surface: &mut ShipSurface, program: &[Word]) -> Resul
     };
 
     let mut cpu: Processor = Processor::new(Word(0));
-    cpu.load(Word(0), program);
+    cpu.load(Word(0), program)?;
     cpu.run_with_io(&mut get_input, &mut do_output)?;
     Ok(location)
 }
@@ -219,7 +224,7 @@ fn run_robot(start: Panel, surface: &mut ShipSurface, program: &[Word]) -> Resul
 fn part1(program: &[Word]) {
     let start = Panel { x: 0, y: 0 };
     let mut surface = ShipSurface::new();
-    if let Err(e) = run_robot(start, &mut surface, program) {
+    if let Err(e) = run_robot(start, PaintColour::Black, &mut surface, program) {
         eprintln!("Painting robot crashed: {:?}", e);
     } else {
         println!(
@@ -229,10 +234,21 @@ fn part1(program: &[Word]) {
     }
 }
 
+fn part2(program: &[Word]) {
+    let start = Panel { x: 0, y: 0 };
+    let mut surface = ShipSurface::new();
+    if let Err(e) = run_robot(start, PaintColour::White, &mut surface, program) {
+        eprintln!("Painting robot crashed: {:?}", e);
+    } else {
+        println!("Day 11 part 2\n{}", surface);
+    }
+}
+
 fn main() {
     match read_program_from_stdin() {
         Ok(words) => {
             part1(&words);
+            part2(&words);
         }
         Err(e) => {
             eprintln!("failed to load program: {}", e);
