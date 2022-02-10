@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use std::io;
-use std::io::BufRead;
+
+use aoc::read_stdin_lines;
 
 fn string_to_oribit(s: &str) -> (String, String) {
     match s.split_once(')') {
@@ -122,9 +122,10 @@ fn part2(parent_of: &HashMap<String, String>) {
 }
 
 fn main() {
-    let orbits: Vec<(String, String)> = io::BufReader::new(io::stdin())
-        .lines()
-        .map(|s| string_to_oribit(s.unwrap().as_str()))
+    let orbits: Vec<(String, String)> = read_stdin_lines()
+        .expect("input should be readable")
+        .iter()
+        .map(|s| string_to_oribit(s.as_str()))
         .collect();
     let (parent_of, all_bodies) = build_tree(&orbits);
     part1(&parent_of, &all_bodies);

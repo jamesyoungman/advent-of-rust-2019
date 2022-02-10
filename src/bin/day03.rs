@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io;
-use std::io::BufRead;
+
+use aoc::read_stdin_lines;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 struct Point {
@@ -321,11 +321,10 @@ fn string_to_moves(s: &str) -> Result<Vec<Move>, BadMove> {
 }
 
 fn main() {
-    let wires: Vec<Vec<Move>> = io::BufReader::new(io::stdin())
-        .lines()
-        .map(|s| -> Vec<Move> {
-            string_to_moves(s.unwrap().as_str()).expect("input should be valid")
-        })
+    let wires: Vec<Vec<Move>> = read_stdin_lines()
+        .expect("stdin should be readable")
+        .iter()
+        .map(|s| -> Vec<Move> { string_to_moves(s.as_str()).expect("input should be valid") })
         .collect();
     part1(&wires, &mut None);
     part2(&wires, &mut None);

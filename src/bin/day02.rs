@@ -1,9 +1,8 @@
-use std::io;
-use std::io::prelude::*;
-
 use cpu::InputOutputError;
 use cpu::Processor;
 use cpu::Word;
+
+use cpu::read_program_from_stdin;
 
 fn run_program(program: &[Word], noun: Word, verb: Word) -> Word {
     let mut modified_program: Vec<Word> = program.iter().copied().collect();
@@ -44,24 +43,7 @@ fn part2(program: &[Word]) {
 }
 
 fn main() {
-    let words: Vec<Word> = io::BufReader::new(io::stdin())
-        .lines()
-        .map(|line| line.expect("should be able to read the program"))
-        .flat_map(|s| {
-            let mut numbers: Vec<Word> = Vec::new();
-            for field in s.split(',') {
-                match field.parse::<i64>() {
-                    Ok(n) => {
-                        numbers.push(Word(n));
-                    }
-                    Err(e) => {
-                        panic!("invalid instruction {}: {}", field, e);
-                    }
-                }
-            }
-            numbers
-        })
-        .collect();
+    let words: Vec<Word> = read_program_from_stdin().expect("stdin should be readable");
     part1(&words);
     part2(&words);
 }
