@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 itertools = "0.10"
 ndarray = "0.15"
+aoc = { path = "../../aoc" }
 
 [lib]
 name = "cpu"

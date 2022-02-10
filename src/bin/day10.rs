@@ -2,7 +2,8 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::f64::consts::PI;
 use std::fmt::Display;
-use std::io::{self, Read};
+
+use aoc::read_stdin_as_string;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
 struct Point {
@@ -101,9 +102,7 @@ impl From<&str> for AsteroidField {
 }
 
 fn parse_input() -> Result<AsteroidField, std::io::Error> {
-    let mut input: String = String::new();
-    io::BufReader::new(io::stdin()).read_to_string(&mut input)?;
-    Ok(input.as_str().into())
+    Ok(read_stdin_as_string()?.as_str().into())
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]

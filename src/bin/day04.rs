@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use aoc::read_stdin_as_string;
 
 fn ok(pw: &i32, doubling_limit: usize) -> bool {
     let num: String = pw.to_string();
@@ -45,13 +45,7 @@ fn countpw(pwmin: i32, pwmax: i32, limit: usize) -> usize {
 }
 
 fn main() {
-    let mut input = String::new();
-    match io::stdin().read_to_string(&mut input) {
-        Ok(_) => (),
-        Err(e) => {
-            panic!("failed to read input: {}", e);
-        }
-    }
+    let input = read_stdin_as_string().expect("should be able to read input");
     match input.trim().split_once('-') {
         Some((begin, end)) => match (begin.parse(), end.parse()) {
             (Ok(b), Ok(e)) => {

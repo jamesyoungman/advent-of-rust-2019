@@ -1,7 +1,8 @@
 use std::collections::HashMap;
-use std::io::{self, Read};
 
 use ndarray::prelude::*;
+
+use aoc::read_stdin_as_string;
 
 #[derive(Debug)]
 enum BadInput {
@@ -10,11 +11,11 @@ enum BadInput {
 }
 
 fn parse_input(w: usize, h: usize) -> Result<Vec<Array2<char>>, BadInput> {
-    let mut input: String = String::new();
-    if let Err(e) = io::BufReader::new(io::stdin()).read_to_string(&mut input) {
-        return Err(BadInput::IOError(e));
-    }
-    let input: Vec<char> = input.trim().chars().collect();
+    let input: Vec<char> = read_stdin_as_string()
+        .map_err(BadInput::IOError)?
+        .trim()
+        .chars()
+        .collect();
     let mut result = Vec::new();
     let pixels_per_layer = w * h;
     if input.len() % pixels_per_layer != 0 {
