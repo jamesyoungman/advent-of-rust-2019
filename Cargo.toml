@@ -9,6 +9,7 @@ edition = "2021"
 itertools = "0.10"
 ndarray = "0.15"
 aoc = { path = "../../aoc" }
+regex = "1"
 
 [lib]
 name = "cpu"
