@@ -1,13 +1,14 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
+use std::hash::Hash;
 use std::io;
 use std::io::BufRead;
 use std::num::{ParseIntError, TryFromIntError};
 
 pub const NUM_PARAMS: usize = 4;
 
-#[derive(Clone, Copy, Eq)]
+#[derive(Clone, Copy, Hash)]
 pub struct Word(pub i64);
 
 impl Word {
@@ -168,6 +169,8 @@ impl PartialEq for Word {
         self.0 == other.0
     }
 }
+
+impl Eq for Word {}
 
 impl PartialOrd for Word {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
