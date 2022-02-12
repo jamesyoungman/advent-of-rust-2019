@@ -1,14 +1,14 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::BufRead;
 use std::num::{ParseIntError, TryFromIntError};
 
 pub const NUM_PARAMS: usize = 4;
 
-#[derive(Clone, Copy, Hash)]
+#[derive(Clone, Copy)]
 pub struct Word(pub i64);
 
 impl Word {
@@ -171,6 +171,15 @@ impl PartialEq for Word {
 }
 
 impl Eq for Word {}
+
+impl Hash for Word {
+    fn hash<H>(&self, h: &mut H)
+    where
+        H: Hasher,
+    {
+        self.0.hash(h)
+    }
+}
 
 impl PartialOrd for Word {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -352,7 +361,6 @@ impl Memory {
     }
 
     pub fn load(&mut self, base: Word, program: &[Word]) -> Result<(), CpuFault> {
-        self.content.clear();
         let base: Word = Memory::pos(base)?;
         for (offset, w) in program.iter().enumerate() {
             let offset: Word = match offset.try_into() {
