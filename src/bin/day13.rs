@@ -107,12 +107,9 @@ impl GameState {
     }
 
     fn done(&mut self) {
-        match self.window {
-            Some(_) => {
-                thread::sleep(time::Duration::from_millis(4000));
-                endwin();
-            }
-            _ => (),
+        if self.window.is_some() {
+            thread::sleep(time::Duration::from_millis(4000));
+            endwin();
         }
     }
 
