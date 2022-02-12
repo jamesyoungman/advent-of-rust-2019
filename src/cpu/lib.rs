@@ -1,9 +1,11 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
+use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io;
 use std::io::BufRead;
+use std::io::Write;
 use std::num::{ParseIntError, TryFromIntError};
 
 pub const NUM_PARAMS: usize = 4;
@@ -118,18 +120,25 @@ impl Display for InputOutputError {
 
 impl std::error::Error for InputOutputError {}
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum CpuFault {
     Overflow,
     InvalidInstruction(BadInstruction),
     MemoryFault,
     AddressingModeNotValidInContext,
     IOError(InputOutputError),
+    TraceError(String),
 }
 
 impl From<BadInstruction> for CpuFault {
     fn from(bi: BadInstruction) -> Self {
         CpuFault::InvalidInstruction(bi)
+    }
+}
+
+impl From<std::io::Error> for CpuFault {
+    fn from(ioe: std::io::Error) -> Self {
+        CpuFault::TraceError(ioe.to_string())
     }
 }
 
@@ -145,6 +154,7 @@ impl Display for CpuFault {
             CpuFault::IOError(e) => {
                 write!(f, "I/O error: {}", e)
             }
+            CpuFault::TraceError(e) => f.write_str(e.as_str()),
         }
     }
 }
@@ -190,6 +200,85 @@ impl PartialOrd for Word {
 impl Ord for Word {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
+    }
+}
+
+#[derive(Debug)]
+struct Tracer {
+    event_seqno: u64,
+    output: Option<File>,
+}
+
+impl Tracer {
+    fn new() -> Tracer {
+        Tracer {
+            event_seqno: 0,
+            output: None,
+        }
+    }
+
+    fn next_seq(&mut self) -> u64 {
+        let result = self.event_seqno;
+        self.event_seqno += 1;
+        result
+    }
+
+    fn enable(&mut self, file: File) {
+        self.output = Some(file);
+    }
+
+    fn close(&mut self) -> Result<(), std::io::Error> {
+        let result = if let Some(file) = self.output.as_ref() {
+            file.sync_all()
+        } else {
+            Ok(())
+        };
+        self.output = None;
+        result
+    }
+    fn trace_execution(&mut self, pc: Word, instruction: Word) -> Result<(), std::io::Error> {
+        let seq = self.next_seq();
+        if let Some(mut file) = self.output.as_ref() {
+            writeln!(file, "{} @{}: execute {}", seq, pc, instruction)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn trace_mem_load(&mut self, addr: Word, value: Word) -> Result<(), std::io::Error> {
+        let seq = self.next_seq();
+        if let Some(mut file) = self.output.as_ref() {
+            writeln!(file, "{} @{}: load {}", seq, addr, value)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn trace_mem_store(&mut self, addr: Word, value: Word) -> Result<(), std::io::Error> {
+        let seq = self.next_seq();
+        if let Some(mut file) = self.output.as_ref() {
+            writeln!(file, "{} @{}: store {}", seq, addr, value)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn trace_io_read(&mut self, value: Word) -> Result<(), std::io::Error> {
+        let seq = self.next_seq();
+        if let Some(mut file) = self.output.as_ref() {
+            writeln!(file, "{} io-read:{}", seq, value)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn trace_io_write(&mut self, value: Word) -> Result<(), std::io::Error> {
+        let seq = self.next_seq();
+        if let Some(mut file) = self.output.as_ref() {
+            writeln!(file, "{} io-write:{}", seq, value)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -390,6 +479,7 @@ pub struct Processor {
     ram: Memory,
     relative_base: i64,
     pc: Word,
+    tracer: Tracer,
 }
 
 impl Processor {
@@ -398,7 +488,12 @@ impl Processor {
             ram: Memory::new(),
             relative_base: 0,
             pc: initial_pc,
+            tracer: Tracer::new(),
         }
+    }
+
+    pub fn enable_tracing(&mut self, file: File) {
+        self.tracer.enable(file)
     }
 
     fn update_relative_base(&mut self, delta: Word) -> Result<(), CpuFault> {
@@ -438,6 +533,7 @@ impl Processor {
         FO: FnMut(Word) -> Result<(), InputOutputError>,
     {
         let instruction = self.ram.fetch(self.pc)?;
+        self.tracer.trace_execution(self.pc, instruction)?;
         let decoded = decode(instruction, self.pc)?;
         //println!("executing at {}: {:?}", &self.pc, &decoded);
         let (state, next_pc) = match decoded.op {
@@ -452,7 +548,7 @@ impl Processor {
             }
             Opcode::Read => match get_input() {
                 Ok(input) => {
-                    //println!("input word was {}", &input.0);
+                    self.tracer.trace_io_read(input)?;
                     self.put(&decoded.addressing_modes, 1, input)?;
                     (CpuStatus::Run, self.pc.checked_add(&Word(2_i64))?)
                 }
@@ -462,6 +558,7 @@ impl Processor {
             },
             Opcode::Write => {
                 let output = self.get(&decoded.addressing_modes, 1)?;
+                self.tracer.trace_io_write(output)?;
                 match do_output(output) {
                     Ok(()) => (CpuStatus::Run, self.pc.checked_add(&Word(2_i64))?),
                     Err(e) => {
@@ -523,16 +620,19 @@ impl Processor {
     ) -> Result<Word, CpuFault> {
         assert!(matches!(index, 1 | 2 | 3));
         let fetch_loc: Word = self.pc.checked_add_usize(&index)?;
-        match modes[index] {
-            AddressingMode::POSITIONAL => Ok(self.ram.fetch(self.ram.fetch(fetch_loc)?)?),
-            AddressingMode::IMMEDIATE => Ok(self.ram.fetch(fetch_loc)?),
+        let fetch_loc = match modes[index] {
+            AddressingMode::POSITIONAL => self.ram.fetch(fetch_loc)?,
+            AddressingMode::IMMEDIATE => fetch_loc,
             AddressingMode::RELATIVE => {
                 let base: Word = Word(self.relative_base);
                 let offset = self.ram.fetch(fetch_loc)?;
                 let rel_loc: Word = offset.checked_add(&base)?;
-                Ok(self.ram.fetch(rel_loc)?)
+                rel_loc
             }
-        }
+        };
+        let result = self.ram.fetch(fetch_loc)?;
+        self.tracer.trace_mem_load(fetch_loc, result)?;
+        Ok(result)
     }
 
     fn put(
@@ -553,6 +653,7 @@ impl Processor {
                 return Err(CpuFault::AddressingModeNotValidInContext);
             }
         };
+        self.tracer.trace_mem_store(store_loc, value)?;
         self.ram.store(store_loc, value)?;
         Ok(())
     }
@@ -609,6 +710,13 @@ impl Processor {
                 }
             }
         }
+    }
+}
+
+impl Drop for Processor {
+    fn drop(&mut self) {
+        let possible_failure = self.tracer.close();
+        drop(possible_failure)
     }
 }
 
