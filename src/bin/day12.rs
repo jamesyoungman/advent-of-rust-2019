@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::{Add, Div, Mul, Rem};
 use std::str::FromStr;
 
 use regex::Regex;
@@ -9,12 +10,21 @@ use aoc::read_stdin_lines;
 const DIMENSIONS: usize = 3;
 
 #[derive(Debug)]
-struct SimulationFlags {
-    verbose: bool,
+struct SimulationFlags<FV>
+where
+    FV: Fn(u64) -> bool,
+{
+    verbose: FV,
 }
 
 #[derive(Debug)]
 struct Overflow {}
+
+impl PartialEq for Overflow {
+    fn eq(&self, _: &Overflow) -> bool {
+        true
+    }
+}
 
 impl Display for Overflow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -44,12 +54,6 @@ impl Display for Velocity {
 impl Distance {
     fn add(&self, other: Velocity) -> Result<Distance, Overflow> {
         match self.0.checked_add(other.0) {
-            Some(n) => Ok(Distance(n)),
-            None => Err(Overflow {}),
-        }
-    }
-    fn sub(&self, other: Velocity) -> Result<Distance, Overflow> {
-        match self.0.checked_sub(other.0) {
             Some(n) => Ok(Distance(n)),
             None => Err(Overflow {}),
         }
@@ -105,6 +109,7 @@ impl Display for BadInput {
 
 impl std::error::Error for BadInput {}
 
+#[derive(Clone)]
 struct System1D {
     position: Vec<Distance>,
     velocity: Vec<Velocity>,
@@ -125,7 +130,10 @@ impl System1D {
         }
     }
 
-    fn step(&mut self, _: &SimulationFlags) -> Result<(), Overflow> {
+    fn step<FV>(&mut self, _: &SimulationFlags<FV>) -> Result<(), Overflow>
+    where
+        FV: Fn(u64) -> bool,
+    {
         // Apply gravity
         for first in 0..self.size {
             for second in 0..first {
@@ -158,8 +166,14 @@ impl System1D {
     fn kinetic_energy(&self, i: usize) -> i32 {
         self.velocity[i].0.abs()
     }
+
+    fn axis_match(&self, other: &System1D) -> bool {
+        (0..self.size)
+            .all(|n| self.position[n] == other.position[n] && self.velocity[n] == other.velocity[n])
+    }
 }
 
+#[derive(Clone)]
 struct System3 {
     systems: [System1D; DIMENSIONS],
     body_count: usize,
@@ -167,22 +181,24 @@ struct System3 {
 
 impl System3 {
     fn new(systems: [System1D; DIMENSIONS]) -> System3 {
-        assert!(DIMENSIONS > 0);
         let body_count = systems[0].body_count();
-        for i in 0..DIMENSIONS {
-            assert_eq!(systems[i].body_count(), body_count);
-        }
+        assert!(systems
+            .iter()
+            .all(|system| system.body_count() == body_count));
         System3 {
             systems,
             body_count,
         }
     }
 
-    fn step(&mut self, step_number: usize, flags: &SimulationFlags) -> Result<(), Overflow> {
+    fn step<FV>(&mut self, step_number: u64, flags: &SimulationFlags<FV>) -> Result<(), Overflow>
+    where
+        FV: Fn(u64) -> bool,
+    {
         for system in self.systems.iter_mut() {
             system.step(flags)?;
         }
-        if flags.verbose {
+        if (flags.verbose)(step_number) {
             println!(
                 "After {} {}:\n{}",
                 step_number,
@@ -214,15 +230,19 @@ impl System3 {
             })
             .sum()
     }
+
+    fn axis_match(&self, axis: usize, initial: &System3) -> bool {
+        self.systems[axis].axis_match(&initial.systems[axis])
+    }
 }
 
 impl Display for System3 {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         for body in 0..self.body_count {
             // pos=<x= -8, y=-10, z=  0>, vel=<x=  0, y=  0, z=  0>
-            write!(
+            writeln!(
                 f,
-                "pos=<x={:>3}, y={:>3}, z={:>3}>, vel=<x={:>3}, y={:>3}, z={:>3}>\n",
+                "pos=<x={:>3}, y={:>3}, z={:>3}>, vel=<x={:>3}, y={:>3}, z={:>3}>",
                 self.systems[0].position[body],
                 self.systems[1].position[body],
                 self.systems[2].position[body],
@@ -284,8 +304,15 @@ fn read_initial_state() -> Result<System3, BadInput> {
     parse_initial_state(&lines)
 }
 
-fn solve1(system: &mut System3, steps: usize, flags: &SimulationFlags) -> Result<i32, Overflow> {
-    if flags.verbose {
+fn solve1<FV>(
+    system: &mut System3,
+    steps: u64,
+    flags: &SimulationFlags<FV>,
+) -> Result<i32, Overflow>
+where
+    FV: Fn(u64) -> bool,
+{
+    if (flags.verbose)(0) {
         println!("After 0 steps:\n{}", system);
     }
     for step_number in 1..=steps {
@@ -306,7 +333,7 @@ fn test_solve1_first_example() {
     .map(String::from)
     .collect();
     let mut system = parse_initial_state(&input).expect("test input should be valid");
-    let flags = SimulationFlags { verbose: true };
+    let flags = SimulationFlags { verbose: |_| true };
     let energy = solve1(&mut system, 10, &flags).expect("simulation should succeed");
     assert_eq!(energy, 179);
 }
@@ -323,14 +350,14 @@ fn test_solve1_second_example() {
     .map(String::from)
     .collect();
     let mut system = parse_initial_state(&input).expect("test input should be valid");
-    let flags = SimulationFlags { verbose: false };
+    let flags = SimulationFlags { verbose: |_| false };
     let energy = solve1(&mut system, 100, &flags).expect("simulation should succeed");
     assert_eq!(energy, 1940);
 }
 
 fn part1(system: &mut System3) {
-    const STEPS: usize = 1000;
-    let flags = SimulationFlags { verbose: false };
+    const STEPS: u64 = 1000;
+    let flags = SimulationFlags { verbose: |_| false };
     match solve1(system, STEPS, &flags) {
         Ok(energy) => {
             println!(
@@ -344,9 +371,131 @@ fn part1(system: &mut System3) {
     }
 }
 
+fn gcd<T>(a: T, b: T) -> T
+where
+    T: Add + Rem<Output = T> + PartialEq + From<u8> + Copy,
+{
+    if a == 0_u8.into() {
+        b
+    } else {
+        gcd(b % a, a)
+    }
+}
+
+#[test]
+fn test_gcd() {
+    assert_eq!(gcd(12_u8, 9_u8), 3_u8);
+    assert_eq!(gcd(12_u8, 8_u8), 4_u8);
+    assert_eq!(gcd(12_u8, 11_u8), 1_u8);
+}
+
+fn lcm<T>(a: T, b: T) -> T
+where
+    T: Add + Rem<Output = T> + Mul<Output = T> + Div<Output = T> + PartialEq + From<u8> + Copy,
+{
+    (a * b) / gcd(a, b)
+}
+
+#[test]
+fn test_lcm() {
+    assert_eq!(lcm(3_u8, 4_u8), 12_u8);
+    assert_eq!(lcm(12_u8, 8_u8), 24_u8);
+}
+
+fn lcm3<T>(a: T, b: T, c: T) -> T
+where
+    T: Add + Rem<Output = T> + Mul<Output = T> + Div<Output = T> + PartialEq + From<u8> + Copy,
+{
+    lcm(a, lcm(b, c))
+}
+
+fn solve2<FV>(
+    system: &mut System3,
+    step_limit: u64,
+    flags: &SimulationFlags<FV>,
+) -> Result<Option<u64>, Overflow>
+where
+    FV: Fn(u64) -> bool,
+{
+    let initial = system.clone();
+    let mut cycles_to_find: usize = DIMENSIONS;
+    let mut cycle: [Option<u64>; DIMENSIONS] = [None, None, None];
+    for step_number in 1..=step_limit {
+        if cycles_to_find == 0 {
+            break;
+        }
+        system.step(step_number, flags)?;
+        for (axis, cyc) in cycle
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, cyc)| cyc.is_none())
+        {
+            if system.axis_match(axis, &initial) {
+                *cyc = Some(step_number);
+                cycles_to_find -= 1;
+                println!(
+                    "solve2: at iteration {} found cycle in dimension {}",
+                    step_number, axis
+                );
+            }
+        }
+    }
+    match (cycle[0], cycle[1], cycle[2]) {
+        (Some(a), Some(b), Some(c)) => {
+            let full_cycle = lcm3(a, b, c);
+            println!("Cycle length on all dimensions is {}", full_cycle);
+            Ok(Some(full_cycle))
+        }
+        _ => {
+            eprintln!(
+                "Did not find a cycle on at least one dimension: {:?}",
+                cycle
+            );
+            Ok(None)
+        }
+    }
+}
+
+fn part2(system: &mut System3) {
+    let flags = SimulationFlags { verbose: |_| false };
+    match solve2(system, 1000000, &flags) {
+        Ok(Some(n)) => {
+            println!("Day 12 part 2: {}", n);
+        }
+        Ok(_) => {
+            println!("Day 12 part 2: no solution");
+        }
+        Err(e) => {
+            eprintln!("Day 12 part 2: failed: {}", e);
+        }
+    }
+}
+
+#[test]
+fn test_solve2_first_example() {
+    let input: Vec<String> = vec![
+        "<x=-1, y=0, z=2>\n",
+        "<x=2, y=-10, z=-7>\n",
+        "<x=4, y=-8, z=8>\n",
+        "<x=3, y=5, z=-1>\n",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+    let mut system = parse_initial_state(&input).expect("test input should be valid");
+    let flags = SimulationFlags {
+        verbose: |n| match n {
+            0 | 2770 | 2771 | 2772 => true,
+            _ => false,
+        },
+    };
+    assert_eq!(solve2(&mut system, 3000, &flags), Ok(Some(2772)));
+}
+
 fn run() -> Result<(), BadInput> {
     let mut system = read_initial_state()?;
-    part1(&mut system);
+    part1(&mut system.clone());
+    part2(&mut system);
     Ok(())
 }
 
