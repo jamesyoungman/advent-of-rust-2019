@@ -340,7 +340,19 @@ fn part1(mapping: &HashMap<Chemical, Recipe>) {
     }
 }
 
-fn open_ended_binary_search<P>(mut lower: i64, mut upper: Option<i64>, test: P) -> i64
+fn midpoint(lower: i64, upper: i64) -> i64 {
+    let width = match upper.checked_sub(lower) {
+        Some(width) => width,
+        None => i64::MAX,
+    };
+    lower + width / 2
+}
+
+fn open_ended_binary_search<P>(
+    mut lower: i64,
+    mut upper: Option<i64>,
+    test: P,
+) -> Result<i64, String>
 where
     P: Fn(i64) -> Ordering,
 {
@@ -352,21 +364,37 @@ where
             Ordering::Less => {
                 // needle is less than guess; i.e. in the range [lower, guess)
                 upper = Some(guess);
-                guess = lower + (guess - lower) / 2;
+                guess = midpoint(lower, guess);
                 if guess == previous_guess {
-                    return lower - 1;
+                    match lower.checked_sub(1) {
+                        Some(n) => {
+                            return Ok(n);
+                        }
+                        None => {
+                            return Err(format!(
+				"predicate had returned Less for guess {} but there are no lower representable numbers",
+				lower
+			    ));
+                        }
+                    }
                 }
             }
             Ordering::Equal => {
-                return guess;
+                return Ok(guess);
             }
             Ordering::Greater => {
                 if let Some(u) = upper {
                     // needle is greater than guess; i.e. in the range [guess+1, u)
-                    lower = guess + 1;
-                    guess = lower + (u - lower) / 2;
+                    lower = match guess.checked_add(1) {
+                        Some(n) => n,
+                        None => {
+                            return Err(format!("predicate had returned Greater for guess {} but there are no higher representable numbers",
+					       guess));
+                        }
+                    };
+                    guess = midpoint(lower, u);
                     if guess == previous_guess {
-                        return u;
+                        return Ok(u);
                     }
                 } else {
                     // needle is greater than guess
@@ -386,8 +414,8 @@ where
 #[cfg(test)]
 fn check_can_guess_number(goal: i64) {
     let check = |guess: i64| -> Ordering { goal.cmp(&guess) };
-    let solution = open_ended_binary_search(1, None, check);
-    assert_eq!(solution, goal, "failed to guess {}", goal);
+    let solution = open_ended_binary_search(i64::MIN, None, check);
+    assert_eq!(solution, Ok(goal), "failed to guess {}", goal);
 }
 
 #[test]
@@ -401,7 +429,7 @@ fn test_open_ended_binary_search_exact() {
     check_can_guess_number(100);
     check_can_guess_number(1000000);
     check_can_guess_number(i64::MAX - 1);
-    //check_can_guess_number(i32::MAX);
+    check_can_guess_number(i64::MAX);
 }
 
 #[cfg(test)]
@@ -413,7 +441,7 @@ fn check_can_guess_number_and_a_half(goal: i64) {
         }
     };
     let solution = open_ended_binary_search(1, None, check);
-    assert_eq!(solution, goal, "failed to guess {}½", goal);
+    assert_eq!(solution, Ok(goal), "failed to guess {}½", goal);
 }
 
 #[test]
@@ -429,7 +457,7 @@ fn test_open_ended_binary_search_inexact() {
     check_can_guess_number_and_a_half(i64::MAX - 1);
 }
 
-fn solve2(mapping: &HashMap<Chemical, Recipe>) -> Quantity {
+fn solve2(mapping: &HashMap<Chemical, Recipe>) -> Result<Quantity, String> {
     const ONE_TRILLION: Quantity = 1_000_000_000_000;
     let check = |fuel: Quantity| -> Ordering {
         let required_ore = match ore_cost_of_fuel(fuel, mapping) {
@@ -466,7 +494,7 @@ fn test_solve2_example2() {
     ])
     .expect("part 2 example 2 should be valid");
     let mapping = make_recipe_map(recipes);
-    assert_eq!(solve2(&mapping), 82892753);
+    assert_eq!(solve2(&mapping), Ok(82892753));
 }
 
 #[test]
@@ -487,11 +515,18 @@ fn test_solve2_example3() {
     ])
     .expect("part 1 example 3 should be valid");
     let mapping = make_recipe_map(recipes);
-    assert_eq!(solve2(&mapping), 5586022);
+    assert_eq!(solve2(&mapping), Ok(5586022));
 }
 
 fn part2(mapping: &HashMap<Chemical, Recipe>) {
-    println!("Day 14 part 2: {}", solve2(mapping));
+    match solve2(mapping) {
+        Ok(n) => {
+            println!("Day 14 part 2: {}", n);
+        }
+        Err(e) => {
+            eprintln!("Day 14 part 2: failed: {}", e);
+        }
+    }
 }
 
 fn main() {
