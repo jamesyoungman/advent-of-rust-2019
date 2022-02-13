@@ -168,7 +168,6 @@ impl Wanted {
         {
             Some(n) => {
                 *n += item.1;
-                return;
             }
             None => {
                 self.items.push(item);
