@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
@@ -195,18 +196,18 @@ fn ore_cost_of(
         let make_quantity = recipe.output.quantity * multiplier;
         assert!(make_quantity >= need_quantity);
 
-        if !make_chemical.is_ore() {
-            print!("Consume");
-            for (i, input) in recipe.inputs.iter().enumerate() {
-                print!(
-                    "{} {} {}",
-                    if i > 0 { "," } else { "" },
-                    input.quantity * multiplier,
-                    &input.chemical
-                );
-            }
-            println!(" to produce {} {}", make_quantity, make_chemical);
-        }
+        //if !make_chemical.is_ore() {
+        //    print!("Consume");
+        //    for (i, input) in recipe.inputs.iter().enumerate() {
+        //        print!(
+        //            "{} {} {}",
+        //            if i > 0 { "," } else { "" },
+        //            input.quantity * multiplier,
+        //            &input.chemical
+        //        );
+        //    }
+        //    println!(" to produce {} {}", make_quantity, make_chemical);
+        //}
 
         for input in recipe.inputs.iter() {
             let needed = input.quantity * multiplier;
@@ -234,11 +235,18 @@ fn ore_cost_of(
     Ok(ore_used)
 }
 
-fn solve1(mapping: &HashMap<Chemical, Recipe>) -> Result<Quantity, String> {
+fn ore_cost_of_fuel(
+    fuel_demand: Quantity,
+    mapping: &HashMap<Chemical, Recipe>,
+) -> Result<Quantity, String> {
     let mut wanted = Wanted::new();
-    wanted.push((Chemical::new("FUEL"), 1));
+    wanted.push((Chemical::new("FUEL"), fuel_demand));
     let mut stock = HashMap::new();
     ore_cost_of(&mut wanted, &mut stock, mapping)
+}
+
+fn solve1(mapping: &HashMap<Chemical, Recipe>) -> Result<Quantity, String> {
+    ore_cost_of_fuel(1, mapping)
 }
 
 #[test]
@@ -333,12 +341,167 @@ fn part1(mapping: &HashMap<Chemical, Recipe>) {
     }
 }
 
+fn open_ended_binary_search<P>(mut lower: i64, mut upper: Option<i64>, test: P) -> i64
+where
+    P: Fn(i64) -> Ordering,
+{
+    let mut guess = lower;
+    loop {
+        let previous_guess = guess;
+        let comparison_result = test(guess);
+        match comparison_result {
+            Ordering::Less => {
+                // needle is less than guess; i.e. in the range [lower, guess)
+                upper = Some(guess);
+                guess = lower + (guess - lower) / 2;
+                if guess == previous_guess {
+                    return lower - 1;
+                }
+            }
+            Ordering::Equal => {
+                return guess;
+            }
+            Ordering::Greater => {
+                if let Some(u) = upper {
+                    // needle is greater than guess; i.e. in the range [guess+1, u)
+                    lower = guess + 1;
+                    guess = lower + (u - lower) / 2;
+                    if guess == previous_guess {
+                        return u;
+                    }
+                } else {
+                    // needle is greater than guess
+                    lower = guess;
+                    guess = if let Some(n) = guess.checked_mul(2) {
+                        n
+                    } else {
+                        i64::MAX
+                    }
+                }
+            }
+        }
+        assert!(guess != previous_guess, "got stuck at {}", guess);
+    }
+}
+
+#[cfg(test)]
+fn check_can_guess_number(goal: i64) {
+    let check = |guess: i64| -> Ordering { goal.cmp(&guess) };
+    let solution = open_ended_binary_search(1, None, check);
+    assert_eq!(solution, goal, "failed to guess {}", goal);
+}
+
+#[test]
+fn test_open_ended_binary_search_exact() {
+    check_can_guess_number(1);
+    check_can_guess_number(2);
+    check_can_guess_number(3);
+    check_can_guess_number(15);
+    check_can_guess_number(16);
+    check_can_guess_number(17);
+    check_can_guess_number(100);
+    check_can_guess_number(1000000);
+    check_can_guess_number(i64::MAX - 1);
+    //check_can_guess_number(i32::MAX);
+}
+
+#[cfg(test)]
+fn check_can_guess_number_and_a_half(goal: i64) {
+    let check = |guess: i64| -> Ordering {
+        match goal.cmp(&guess) {
+            Ordering::Equal => Ordering::Greater,
+            other => other,
+        }
+    };
+    let solution = open_ended_binary_search(1, None, check);
+    assert_eq!(solution, goal, "failed to guess {}½", goal);
+}
+
+#[test]
+fn test_open_ended_binary_search_inexact() {
+    check_can_guess_number_and_a_half(1);
+    check_can_guess_number_and_a_half(2);
+    check_can_guess_number_and_a_half(3);
+    check_can_guess_number_and_a_half(15);
+    check_can_guess_number_and_a_half(16);
+    check_can_guess_number_and_a_half(17);
+    check_can_guess_number_and_a_half(100);
+    check_can_guess_number_and_a_half(1000000);
+    check_can_guess_number_and_a_half(i64::MAX - 1);
+}
+
+fn solve2(mapping: &HashMap<Chemical, Recipe>) -> Quantity {
+    const ONE_TRILLION: Quantity = 1_000_000_000_000;
+    let check = |fuel: Quantity| -> Ordering {
+        let required_ore = match ore_cost_of_fuel(fuel, mapping) {
+            Ok(n) => n,
+            Err(e) => {
+                panic!("solve2: ore_cost_of_fuel failed on {}: {}", fuel, e);
+            }
+        };
+        println!(
+            "Producing {} units of fuel requires {} ore",
+            fuel, required_ore
+        );
+        match required_ore.cmp(&ONE_TRILLION) {
+            Ordering::Greater => Ordering::Less,
+            Ordering::Equal => Ordering::Equal,
+            Ordering::Less => Ordering::Greater,
+        }
+    };
+    open_ended_binary_search(1, None, check)
+}
+
+#[test]
+fn test_solve2_example2() {
+    let recipes: Vec<Recipe> = parse_recipes(&[
+        "157 ORE => 5 NZVS",
+        "165 ORE => 6 DCFZ",
+        "44 XJWVT, 5 KHKGT, 1 QDVJ, 29 NZVS, 9 GPVTF, 48 HKGWZ => 1 FUEL",
+        "12 HKGWZ, 1 GPVTF, 8 PSHF => 9 QDVJ",
+        "179 ORE => 7 PSHF",
+        "177 ORE => 5 HKGWZ",
+        "7 DCFZ, 7 PSHF => 2 XJWVT",
+        "165 ORE => 2 GPVTF",
+        "3 DCFZ, 7 NZVS, 5 HKGWZ, 10 PSHF => 8 KHKGT",
+    ])
+    .expect("part 2 example 2 should be valid");
+    let mapping = make_recipe_map(recipes);
+    assert_eq!(solve2(&mapping), 82892753);
+}
+
+#[test]
+fn test_solve2_example3() {
+    let recipes: Vec<Recipe> = parse_recipes(&[
+        "2 VPVL, 7 FWMGM, 2 CXFTF, 11 MNCFX => 1 STKFG",
+        "17 NVRVD, 3 JNWZP => 8 VPVL",
+        "53 STKFG, 6 MNCFX, 46 VJHF, 81 HVMC, 68 CXFTF, 25 GNMV => 1 FUEL",
+        "22 VJHF, 37 MNCFX => 5 FWMGM",
+        "139 ORE => 4 NVRVD",
+        "144 ORE => 7 JNWZP",
+        "5 MNCFX, 7 RFSQX, 2 FWMGM, 2 VPVL, 19 CXFTF => 3 HVMC",
+        "5 VJHF, 7 MNCFX, 9 VPVL, 37 CXFTF => 6 GNMV",
+        "145 ORE => 6 MNCFX",
+        "1 NVRVD => 8 CXFTF",
+        "1 VJHF, 6 MNCFX => 4 RFSQX",
+        "176 ORE => 6 VJHF",
+    ])
+    .expect("part 1 example 3 should be valid");
+    let mapping = make_recipe_map(recipes);
+    assert_eq!(solve2(&mapping), 5586022);
+}
+
+fn part2(mapping: &HashMap<Chemical, Recipe>) {
+    println!("Day 14 part 2: {}", solve2(mapping));
+}
+
 fn main() {
     let lines = read_stdin_lines().expect("should be able to read input");
     match parse_recipes(&lines) {
         Ok(recipes) => {
             let mapping = make_recipe_map(recipes);
             part1(&mapping);
+            part2(&mapping);
         }
         Err(e) => {
             eprintln!("invalid input: {}", e);
