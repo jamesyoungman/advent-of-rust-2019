@@ -22,7 +22,7 @@ impl Display for Chemical {
     }
 }
 
-type Quantity = i32;
+type Quantity = i64;
 
 #[derive(Debug)]
 struct Reagent {
@@ -80,7 +80,7 @@ struct Recipe {
 }
 
 impl Recipe {
-    fn multiplier_to_produce(&self, quantity: &Quantity) -> i32 {
+    fn multiplier_to_produce(&self, quantity: &Quantity) -> i64 {
         let d = self.output.quantity;
         (quantity + d - 1) / d
     }
@@ -131,44 +131,53 @@ fn make_recipe_map(recipes: Vec<Recipe>) -> HashMap<Chemical, Recipe> {
     for recipe in recipes.into_iter() {
         result.insert(recipe.output.chemical.to_owned(), recipe);
     }
+    result.insert(
+        Chemical::new("ORE"),
+        Recipe {
+            // You "make" ORE from nothing.
+            inputs: Vec::with_capacity(0),
+            output: Reagent {
+                quantity: 1,
+                chemical: Chemical::new("ORE"),
+            },
+        },
+    );
     result
 }
 
-// This implementation apparently doesn't work because it doesn't use
-// reagents left over from a previous reaction, instead preferring to use more ore.
-//
-//fn ore_cost_of(wanted: &Reagent, mapping: &HashMap<Chemical, Recipe>) -> Quantity {
-//    if wanted.chemical.0.as_str() == "ORE" {
-//        wanted.quantity
-//    } else {
-//        match mapping.get(&wanted.chemical) {
-//            Some(recipe) => {
-//                let m = recipe.multiplier_to_produce(&wanted.quantity);
-//                let inputs_needed: Vec<Reagent> = recipe
-//                    .inputs
-//                    .iter()
-//                    .map(|reagent| Reagent {
-//                        quantity: m * reagent.quantity,
-//                        chemical: reagent.chemical.clone(),
-//                    })
-//                    .collect();
-//                let result = inputs_needed
-//                    .iter()
-//                    .map(|reagent| ore_cost_of(reagent, mapping))
-//                    .sum();
-//                let consumed: Vec<String> = inputs_needed.iter().map(|r| r.to_string()).collect();
-//                println!("consume {} to produce {}", consumed.join(", "), &wanted);
-//                result
-//            }
-//            None => {
-//                panic!("apparently there is no way to make {:?}", &wanted);
-//            }
-//        }
-//    }
-//}
+struct Wanted {
+    items: Vec<(Chemical, Quantity)>,
+}
+
+impl Wanted {
+    fn new() -> Wanted {
+        Wanted { items: Vec::new() }
+    }
+
+    fn pop(&mut self) -> Option<(Chemical, Quantity)> {
+        self.items.pop()
+    }
+
+    fn push(&mut self, item: (Chemical, Quantity)) {
+        match self
+            .items
+            .iter_mut()
+            .find(|(chemical, _)| chemical == &item.0)
+            .map(|(_, qty)| qty)
+        {
+            Some(n) => {
+                *n += item.1;
+                return;
+            }
+            None => {
+                self.items.push(item);
+            }
+        }
+    }
+}
 
 fn ore_cost_of(
-    wanted: &mut Vec<(Chemical, Quantity)>,
+    wanted: &mut Wanted,
     stock: &mut HashMap<Chemical, Quantity>,
     mapping: &HashMap<Chemical, Recipe>,
 ) -> Result<Quantity, String> {
@@ -184,40 +193,50 @@ fn ore_cost_of(
         };
         let multiplier = recipe.multiplier_to_produce(&need_quantity);
         let make_quantity = recipe.output.quantity * multiplier;
-        print!("Consume");
-        for (i, reagent) in recipe.inputs.iter().enumerate() {
-            let needed = reagent.quantity * multiplier;
-            if i > 0 {
-                print!(",");
-            }
-            print!(" {} {}", needed, &reagent.chemical);
+        assert!(make_quantity >= need_quantity);
 
-            if reagent.chemical.is_ore() {
-                ore_used += needed;
-            } else {
-                let onhand = stock.entry(reagent.chemical.clone()).or_insert(0);
-                if *onhand > needed {
-                    *onhand -= needed;
-                } else {
-                    wanted.push((reagent.chemical.clone(), needed - *onhand));
-                    *onhand = 0;
-                }
+        if !make_chemical.is_ore() {
+            print!("Consume");
+            for (i, input) in recipe.inputs.iter().enumerate() {
+                print!(
+                    "{} {} {}",
+                    if i > 0 { "," } else { "" },
+                    input.quantity * multiplier,
+                    &input.chemical
+                );
             }
-            let left_over = make_quantity - need_quantity;
-            assert!(left_over >= 0);
-            *stock.entry(make_chemical.clone()).or_insert(0) += left_over;
+            println!(" to produce {} {}", make_quantity, make_chemical);
         }
-        println!(
-            " to produce {} {}",
-            make_quantity * multiplier,
-            make_chemical
-        );
+
+        for input in recipe.inputs.iter() {
+            let needed = input.quantity * multiplier;
+            assert!(needed >= 0);
+            if input.chemical.is_ore() {
+                // we never have ore "on hand" i.e. left over as a prodct
+                // from a previous transformation.
+                ore_used += needed;
+            }
+            let onhand = stock.entry(input.chemical.clone()).or_insert(0);
+            assert!(*onhand >= 0);
+            if *onhand >= needed {
+                *onhand -= needed;
+            } else {
+                let deficit = needed - *onhand;
+                assert!(deficit > 0);
+                *onhand = 0;
+                wanted.push((input.chemical.clone(), deficit));
+            }
+        }
+        let left_over = make_quantity - need_quantity;
+        assert!(left_over >= 0);
+        *stock.entry(make_chemical.clone()).or_insert(0) += left_over;
     }
     Ok(ore_used)
 }
 
 fn solve1(mapping: &HashMap<Chemical, Recipe>) -> Result<Quantity, String> {
-    let mut wanted = vec![(Chemical::new("FUEL"), 1)];
+    let mut wanted = Wanted::new();
+    wanted.push((Chemical::new("FUEL"), 1));
     let mut stock = HashMap::new();
     ore_cost_of(&mut wanted, &mut stock, mapping)
 }
