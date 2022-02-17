@@ -1,8 +1,8 @@
 use itertools::Itertools;
 
-use cpu::Word;
-use cpu::{read_program_from_stdin, InputOutputError};
-use cpu::{CpuFault, CpuStatus, Processor};
+use lib::cpu::Word;
+use lib::cpu::{read_program_from_stdin, InputOutputError};
+use lib::cpu::{CpuFault, CpuStatus, Processor};
 
 fn run_amplifier_chain(program: &[Word], phases: &[Word], input: Word) -> Result<Word, CpuFault> {
     fn run_amplifier(program: &[Word], phase: Word, input: Word) -> Result<Word, CpuFault> {

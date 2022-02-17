@@ -7,9 +7,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::{thread, time};
 
-use cpu::Processor;
-use cpu::Word;
-use cpu::{read_program_from_stdin, CpuFault, InputOutputError};
+use lib::cpu::Processor;
+use lib::cpu::Word;
+use lib::cpu::{read_program_from_stdin, CpuFault, InputOutputError};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 struct Position {

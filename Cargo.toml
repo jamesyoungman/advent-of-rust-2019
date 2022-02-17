@@ -13,8 +13,8 @@ pancurses = "0.17"		# day 13
 regex = "1"
 
 [lib]
-name = "cpu"
-path = "src/cpu/lib.rs"
+name = "lib"
+path = "src/lib/lib.rs"
 
 [[bin]]
 name = "day01"

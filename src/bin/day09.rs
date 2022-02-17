@@ -1,6 +1,6 @@
-use cpu::Processor;
-use cpu::Word;
-use cpu::{read_program_from_stdin, InputOutputError};
+use lib::cpu::Processor;
+use lib::cpu::Word;
+use lib::cpu::{read_program_from_stdin, InputOutputError};
 
 fn run_program(program: &[Word], input_word: Word) -> Vec<Word> {
     let mut cpu = Processor::new(Word(0));

@@ -5,9 +5,9 @@ use std::fmt::{self, Display, Formatter};
 use std::thread;
 use std::time::Duration;
 
-use cpu::Processor;
-use cpu::Word;
-use cpu::{read_program_from_stdin, CpuFault, CpuStatus, InputOutputError};
+use lib::cpu::Processor;
+use lib::cpu::Word;
+use lib::cpu::{read_program_from_stdin, CpuFault, CpuStatus, InputOutputError};
 
 mod grid {
     use std::fmt::{self, Display, Formatter};

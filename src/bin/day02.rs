@@ -1,8 +1,8 @@
-use cpu::InputOutputError;
-use cpu::Processor;
-use cpu::Word;
+use lib::cpu::InputOutputError;
+use lib::cpu::Processor;
+use lib::cpu::Word;
 
-use cpu::read_program_from_stdin;
+use lib::cpu::read_program_from_stdin;
 
 fn run_program(program: &[Word], noun: Word, verb: Word) -> Word {
     let mut modified_program: Vec<Word> = program.iter().copied().collect();

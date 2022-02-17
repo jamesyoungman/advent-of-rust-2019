@@ -1,9 +1,10 @@
-use cpu::Processor;
-use cpu::Word;
-use cpu::{read_program_from_stdin, CpuFault, InputOutputError};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
+
+use lib::cpu::Processor;
+use lib::cpu::Word;
+use lib::cpu::{read_program_from_stdin, CpuFault, InputOutputError};
 
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Clone)]
 struct Panel {
