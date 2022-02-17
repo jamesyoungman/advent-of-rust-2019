@@ -1,12 +1,12 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Display};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::hash::{Hash, Hasher};
-use std::io;
-use std::io::BufRead;
 use std::io::Write;
+use std::io::{self, BufRead, BufReader};
 use std::num::{ParseIntError, TryFromIntError};
+use std::path::{Path, PathBuf};
 
 pub const NUM_PARAMS: usize = 4;
 
@@ -800,15 +800,27 @@ fn test_quine() {
 
 #[derive(Debug)]
 pub enum ProgramLoadError {
-    ReadFailed(std::io::Error),
+    ReadFailed {
+        filename: Option<PathBuf>,
+        err: std::io::Error,
+    },
     BadWord(String, ParseIntError),
 }
 
 impl Display for ProgramLoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ProgramLoadError::ReadFailed(e) => {
+            ProgramLoadError::ReadFailed {
+                filename: None,
+                err: e,
+            } => {
                 write!(f, "failed to read program: {}", e)
+            }
+            ProgramLoadError::ReadFailed {
+                filename: Some(name),
+                err: e,
+            } => {
+                write!(f, "failed to read program from '{}': {}", name.display(), e)
             }
             ProgramLoadError::BadWord(s, e) => {
                 write!(f, "program contained invalid word '{}': {}", s, e)
@@ -819,12 +831,21 @@ impl Display for ProgramLoadError {
 
 impl std::error::Error for ProgramLoadError {}
 
-pub fn read_program_from_stdin() -> Result<Vec<Word>, ProgramLoadError> {
+pub fn read_program_from_reader<T>(
+    input_name: Option<PathBuf>,
+    r: BufReader<T>,
+) -> Result<Vec<Word>, ProgramLoadError>
+where
+    T: std::io::Read,
+{
     let mut words: Vec<Word> = Vec::new();
-    for input_element in io::BufReader::new(io::stdin()).lines() {
+    for input_element in r.lines() {
         match input_element {
             Err(e) => {
-                return Err(ProgramLoadError::ReadFailed(e));
+                return Err(ProgramLoadError::ReadFailed {
+                    filename: input_name,
+                    err: e,
+                });
             }
             Ok(line) => {
                 for field in line.trim().split(',') {
@@ -841,4 +862,23 @@ pub fn read_program_from_stdin() -> Result<Vec<Word>, ProgramLoadError> {
         }
     }
     Ok(words)
+}
+
+pub fn read_program_from_stdin() -> Result<Vec<Word>, ProgramLoadError> {
+    read_program_from_reader(None, io::BufReader::new(io::stdin()))
+}
+
+pub fn read_program_from_file(input_file_name: &Path) -> Result<Vec<Word>, ProgramLoadError> {
+    match OpenOptions::new()
+        .read(true)
+        .open(input_file_name.as_os_str())
+    {
+        Ok(file) => {
+            read_program_from_reader(Some(input_file_name.to_path_buf()), BufReader::new(file))
+        }
+        Err(e) => Err(ProgramLoadError::ReadFailed {
+            filename: Some(input_file_name.to_path_buf()),
+            err: e,
+        }),
+    }
 }

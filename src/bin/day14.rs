@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
-use aoc::read_stdin_lines;
+use lib::input::{read_file_as_lines, run_with_input, InputError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Chemical(String);
@@ -529,16 +530,42 @@ fn part2(mapping: &HashMap<Chemical, Recipe>) {
     }
 }
 
-fn main() {
-    let lines = read_stdin_lines().expect("should be able to read input");
-    match parse_recipes(&lines) {
+#[derive(Debug)]
+enum Fail {
+    InputError(InputError),
+    BadInput,
+}
+
+impl Display for Fail {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Fail::InputError(e) => write!(f, "input error: {}", e),
+            Fail::BadInput => write!(f, "bad input"),
+        }
+    }
+}
+
+impl From<InputError> for Fail {
+    fn from(e: InputError) -> Fail {
+        Fail::InputError(e)
+    }
+}
+
+impl Error for Fail {}
+
+fn runner(lines: Vec<String>) -> Result<(), Fail> {
+    let parse_result: Result<Vec<Recipe>, BadInput> = parse_recipes(&lines);
+    match parse_result {
         Ok(recipes) => {
             let mapping = make_recipe_map(recipes);
             part1(&mapping);
             part2(&mapping);
+            Ok(())
         }
-        Err(e) => {
-            eprintln!("invalid input: {}", e);
-        }
+        Err(_) => Err(Fail::BadInput),
     }
+}
+
+fn main() -> Result<(), Fail> {
+    run_with_input(14, read_file_as_lines, runner)
 }

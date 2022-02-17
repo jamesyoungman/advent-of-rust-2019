@@ -7,7 +7,8 @@ use std::time::Duration;
 
 use lib::cpu::Processor;
 use lib::cpu::Word;
-use lib::cpu::{read_program_from_stdin, CpuFault, CpuStatus, InputOutputError};
+use lib::cpu::{read_program_from_file, CpuFault, CpuStatus, InputOutputError, ProgramLoadError};
+use lib::input::{run_with_input, InputError};
 
 mod grid {
     use std::fmt::{self, Display, Formatter};
@@ -609,7 +610,45 @@ fn test_part2() {
     assert_eq!(part2(&oxy, &mut sm, display_map), 4);
 }
 
-fn run(program: &[Word]) -> Result<(), CpuFault> {
+#[derive(Debug)]
+enum Fail {
+    CpuFault(CpuFault),
+    InputError(InputError),
+    ProgramLoadError(ProgramLoadError),
+}
+
+impl Display for Fail {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Fail::CpuFault(e) => write!(f, "cpu fault: {}", e),
+            Fail::InputError(e) => write!(f, "input error: {}", e),
+            Fail::ProgramLoadError(e) => write!(f, "failed to load program: {}", e),
+        }
+    }
+}
+
+impl From<CpuFault> for Fail {
+    fn from(e: CpuFault) -> Fail {
+        Fail::CpuFault(e)
+    }
+}
+
+impl From<InputError> for Fail {
+    fn from(e: InputError) -> Fail {
+        Fail::InputError(e)
+    }
+}
+
+impl From<ProgramLoadError> for Fail {
+    fn from(e: ProgramLoadError) -> Fail {
+        Fail::ProgramLoadError(e)
+    }
+}
+
+impl std::error::Error for Fail {}
+
+fn run(words: Vec<Word>) -> Result<(), Fail> {
+    let program = &words;
     let start = Position { x: 0, y: 0 };
     let mut droid = RepairDroid::new(program)?;
     let mut window = initscr();
@@ -643,17 +682,10 @@ fn run(program: &[Word]) -> Result<(), CpuFault> {
             println!("{}", msg);
             Ok(())
         }
-        Err(e) => Err(e),
+        Err(e) => Err(Fail::CpuFault(e)),
     }
 }
 
-fn main() {
-    match read_program_from_stdin() {
-        Ok(words) => {
-            run(&words).expect("program should not fail");
-        }
-        Err(e) => {
-            eprintln!("failed to load program: {}", e);
-        }
-    }
+fn main() -> Result<(), Fail> {
+    run_with_input(14, read_program_from_file, run)
 }
