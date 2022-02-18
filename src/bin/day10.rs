@@ -3,7 +3,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::f64::consts::PI;
 use std::fmt::Display;
 
-use aoc::read_stdin_as_string;
+use lib::error::Fail;
+use lib::input::{read_file_as_string, run_with_input};
 
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
 struct Point {
@@ -99,10 +100,6 @@ impl From<&str> for AsteroidField {
         }
         AsteroidField { asteroids }
     }
-}
-
-fn parse_input() -> Result<AsteroidField, std::io::Error> {
-    Ok(read_stdin_as_string()?.as_str().into())
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -441,8 +438,8 @@ fn test_solve2() {
     assert_eq!(Some(Point { x: 11, y: 1 }), solve2(299, &base, &asteroids));
 }
 
-fn run() -> Result<(), std::io::Error> {
-    let field: AsteroidField = parse_input()?;
+fn run(input: String) -> Result<(), Fail> {
+    let field: AsteroidField = input.as_str().into();
     match solve1(&field) {
         Some(solution) => {
             println!("Day 10 part 1: {:?}", &solution);
@@ -451,19 +448,17 @@ fn run() -> Result<(), std::io::Error> {
                 Some(asteroid) => {
                     let answer = asteroid.x * 100 + asteroid.y;
                     println!("Day 10 part 2: {}", answer);
+                    Ok(())
                 }
-                None => {
-                    println!("Day 10 part 2: no solution found");
-                }
+                None => Err(Fail("Day 10 part 2: no solution found".to_string())),
             }
         }
-        None => {
-            println!("Day 10 part 1: no solution found (so can't solve part 2 either)");
-        }
-    };
-    Ok(())
+        None => Err(Fail(
+            "Day 10 part 1: no solution found (so can't solve part 2 either)".to_string(),
+        )),
+    }
 }
 
-fn main() -> Result<(), String> {
-    run().map_err(|e| format!("{:?}", e))
+fn main() -> Result<(), Fail> {
+    run_with_input(10, read_file_as_string, run)
 }

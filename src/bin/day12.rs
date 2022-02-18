@@ -5,7 +5,8 @@ use std::str::FromStr;
 
 use regex::Regex;
 
-use aoc::read_stdin_lines;
+use lib::error::Fail;
+use lib::input::{read_file_as_lines, run_with_input};
 
 const DIMENSIONS: usize = 3;
 
@@ -97,17 +98,6 @@ impl IntegerExtractor {
             .collect()
     }
 }
-
-#[derive(Debug)]
-struct BadInput(String);
-
-impl Display for BadInput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bad input: {}", &self.0)
-    }
-}
-
-impl std::error::Error for BadInput {}
 
 #[derive(Clone)]
 struct System1D {
@@ -255,11 +245,7 @@ impl Display for System3 {
     }
 }
 
-fn err_as_bad_input<E: std::error::Error>(e: E) -> BadInput {
-    BadInput(e.to_string())
-}
-
-fn parse_initial_state<S>(lines: &[S]) -> Result<System3, BadInput>
+fn parse_initial_state<S>(lines: &[S]) -> Result<System3, Fail>
 where
     S: AsRef<str>,
 {
@@ -272,9 +258,9 @@ where
         let line = line.as_ref();
         let values: Vec<i32> = extractor
             .get_integers::<i32, _>(&line)
-            .map_err(err_as_bad_input)?;
+            .map_err(|e| Fail(e.to_string()))?;
         if values.len() != DIMENSIONS {
-            return Err(BadInput(format!(
+            return Err(Fail(format!(
                 "line {}: expected {} fields, got {}: {}",
                 (i + 1),
                 DIMENSIONS,
@@ -297,11 +283,6 @@ where
         System1D::new(&initial_positions[1], &initial_velocities[1]),
         System1D::new(&initial_positions[2], &initial_velocities[2]),
     ]))
-}
-
-fn read_initial_state() -> Result<System3, BadInput> {
-    let lines: Vec<String> = read_stdin_lines().map_err(err_as_bad_input)?;
-    parse_initial_state(&lines)
 }
 
 fn solve1<FV>(
@@ -355,7 +336,7 @@ fn test_solve1_second_example() {
     assert_eq!(energy, 1940);
 }
 
-fn part1(system: &mut System3) {
+fn part1(system: &mut System3) -> Result<(), Fail> {
     const STEPS: u64 = 1000;
     let flags = SimulationFlags { verbose: |_| false };
     match solve1(system, STEPS, &flags) {
@@ -364,10 +345,9 @@ fn part1(system: &mut System3) {
                 "Day 12 part 1: total energy after {} steps: {}",
                 STEPS, energy
             );
+            Ok(())
         }
-        Err(e) => {
-            eprintln!("Day 12 part 1: failed: {}", e);
-        }
+        Err(e) => Err(Fail(format!("Day 12 part 1: failed: {}", e))),
     }
 }
 
@@ -456,18 +436,15 @@ where
     }
 }
 
-fn part2(system: &mut System3) {
+fn part2(system: &mut System3) -> Result<(), Fail> {
     let flags = SimulationFlags { verbose: |_| false };
     match solve2(system, 1000000, &flags) {
         Ok(Some(n)) => {
             println!("Day 12 part 2: {}", n);
+            Ok(())
         }
-        Ok(_) => {
-            println!("Day 12 part 2: no solution");
-        }
-        Err(e) => {
-            eprintln!("Day 12 part 2: failed: {}", e);
-        }
+        Ok(_) => Err(Fail("Day 12 part 2: no solution".to_string())),
+        Err(e) => Err(Fail(format!("Day 12 part 2: failed: {}", e))),
     }
 }
 
@@ -492,15 +469,13 @@ fn test_solve2_first_example() {
     assert_eq!(solve2(&mut system, 3000, &flags), Ok(Some(2772)));
 }
 
-fn run() -> Result<(), BadInput> {
-    let mut system = read_initial_state()?;
-    part1(&mut system.clone());
-    part2(&mut system);
+fn run(lines: Vec<String>) -> Result<(), Fail> {
+    let mut system = parse_initial_state(&lines)?;
+    part1(&mut system.clone())?;
+    part2(&mut system)?;
     Ok(())
 }
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("failed: {}", e);
-    }
+fn main() -> Result<(), Fail> {
+    run_with_input(12, read_file_as_lines, run)
 }

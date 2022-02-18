@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-aoc = { path = "../../aoc" }
+#aoc = { path = "../../aoc" }
 clap = "3"
 itertools = "0.10"
 ndarray = "0.15"
@@ -45,3 +45,5 @@ name = "day12"
 name = "day13"
 [[bin]]
 name = "day14"
+[[bin]]
+name = "day15"

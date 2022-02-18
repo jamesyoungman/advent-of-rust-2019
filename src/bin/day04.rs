@@ -1,4 +1,5 @@
-use aoc::read_stdin_as_string;
+use lib::error::Fail;
+use lib::input::{read_file_as_string, run_with_input};
 
 fn ok(pw: &i32, doubling_limit: usize) -> bool {
     let num: String = pw.to_string();
@@ -44,20 +45,23 @@ fn countpw(pwmin: i32, pwmax: i32, limit: usize) -> usize {
     (pwmin..=pwmax).filter(is_ok).count()
 }
 
-fn main() {
-    let input = read_stdin_as_string().expect("should be able to read input");
+fn run(input: String) -> Result<(), Fail> {
     match input.trim().split_once('-') {
         Some((begin, end)) => match (begin.parse(), end.parse()) {
             (Ok(b), Ok(e)) => {
                 println!("Day 4 part 1: {}", countpw(b, e, usize::MAX));
                 println!("Day 4 part 2: {}", countpw(b, e, 1));
+                Ok(())
             }
-            (Err(e), _) | (_, Err(e)) => {
-                println!("Day 4: failed to parse input '{}': {}", input, e);
-            }
+            (Err(e), _) | (_, Err(e)) => Err(Fail(format!(
+                "Day 4: failed to parse input '{}': {}",
+                input, e
+            ))),
         },
-        None => {
-            panic!("input has unexpected format: {}", input);
-        }
+        None => Err(Fail(format!("input has unexpected format: {}", input))),
     }
+}
+
+fn main() -> Result<(), Fail> {
+    run_with_input(4, read_file_as_string, run)
 }

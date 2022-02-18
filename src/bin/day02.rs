@@ -1,8 +1,6 @@
-use lib::cpu::InputOutputError;
-use lib::cpu::Processor;
-use lib::cpu::Word;
-
-use lib::cpu::read_program_from_stdin;
+use lib::cpu::{read_program_from_file, InputOutputError, Processor};
+use lib::input::run_with_input;
+use lib::{cpu::Word, error::Fail};
 
 fn run_program(program: &[Word], noun: Word, verb: Word) -> Word {
     let mut modified_program: Vec<Word> = program.iter().copied().collect();
@@ -20,14 +18,15 @@ fn run_program(program: &[Word], noun: Word, verb: Word) -> Word {
     ram[0]
 }
 
-fn part1(program: &[Word]) {
+fn part1(program: &[Word]) -> Result<(), Fail> {
     println!(
         "Day 2 part 1: location 0 contains {}",
         run_program(program, Word(12), Word(2))
     );
+    Ok(())
 }
 
-fn part2(program: &[Word]) {
+fn part2(program: &[Word]) -> Result<(), Fail> {
     const WANTED: Word = Word(19690720);
     for noun in 1..100 {
         for verb in 1..100 {
@@ -35,15 +34,19 @@ fn part2(program: &[Word]) {
             if result == WANTED {
                 let input = 100 * noun + verb;
                 println!("Day 2 part 2: input is {}", input);
-                return;
+                return Ok(());
             }
         }
     }
-    println!("Day 2 part 2: no solution found");
+    Err(Fail("Day 2 part 2: no solution found".to_string()))
 }
 
-fn main() {
-    let words: Vec<Word> = read_program_from_stdin().expect("stdin should be readable");
-    part1(&words);
-    part2(&words);
+fn run(words: Vec<Word>) -> Result<(), Fail> {
+    part1(&words)?;
+    part2(&words)?;
+    Ok(())
+}
+
+fn main() -> Result<(), Fail> {
+    run_with_input(2, read_program_from_file, run)
 }

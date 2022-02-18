@@ -687,5 +687,5 @@ fn run(words: Vec<Word>) -> Result<(), Fail> {
 }
 
 fn main() -> Result<(), Fail> {
-    run_with_input(14, read_program_from_file, run)
+    run_with_input(15, read_program_from_file, run)
 }

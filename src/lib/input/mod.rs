@@ -4,6 +4,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
+use crate::error::Fail;
+
 use clap::{Arg, Command};
 
 #[derive(Debug)]
@@ -28,6 +30,14 @@ impl Display for InputError {
                 err,
             } => write!(f, "read error on input: {}", err),
         }
+    }
+}
+
+impl Error for InputError {}
+
+impl From<InputError> for Fail {
+    fn from(e: InputError) -> Fail {
+        Fail(e.to_string())
     }
 }
 

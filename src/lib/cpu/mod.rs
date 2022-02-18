@@ -8,6 +8,8 @@ use std::io::{self, BufRead, BufReader};
 use std::num::{ParseIntError, TryFromIntError};
 use std::path::{Path, PathBuf};
 
+use crate::error::Fail;
+
 pub const NUM_PARAMS: usize = 4;
 
 #[derive(Clone, Copy)]
@@ -139,6 +141,12 @@ impl From<BadInstruction> for CpuFault {
 impl From<std::io::Error> for CpuFault {
     fn from(ioe: std::io::Error) -> Self {
         CpuFault::TraceError(ioe.to_string())
+    }
+}
+
+impl From<CpuFault> for Fail {
+    fn from(e: CpuFault) -> Self {
+        Fail(e.to_string())
     }
 }
 
@@ -830,6 +838,12 @@ impl Display for ProgramLoadError {
 }
 
 impl std::error::Error for ProgramLoadError {}
+
+impl From<ProgramLoadError> for Fail {
+    fn from(e: ProgramLoadError) -> Fail {
+        Fail(e.to_string())
+    }
+}
 
 pub fn read_program_from_reader<T>(
     input_name: Option<PathBuf>,

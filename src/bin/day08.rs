@@ -1,21 +1,24 @@
+use lib::error::Fail;
+use lib::input::{read_file_as_string, run_with_input};
 use std::collections::HashMap;
 
 use ndarray::prelude::*;
 
-use aoc::read_stdin_as_string;
-
 #[derive(Debug)]
 enum BadInput {
-    IOError(std::io::Error),
     Incomplete(String),
 }
 
-fn parse_input(w: usize, h: usize) -> Result<Vec<Array2<char>>, BadInput> {
-    let input: Vec<char> = read_stdin_as_string()
-        .map_err(BadInput::IOError)?
-        .trim()
-        .chars()
-        .collect();
+impl From<BadInput> for Fail {
+    fn from(e: BadInput) -> Fail {
+        match e {
+            BadInput::Incomplete(msg) => Fail(format!("bad input: input is incomplete: {}", msg)),
+        }
+    }
+}
+
+fn parse_input(w: usize, h: usize, input_body: String) -> Result<Vec<Array2<char>>, BadInput> {
+    let input: Vec<char> = input_body.trim().chars().collect();
     let mut result = Vec::new();
     let pixels_per_layer = w * h;
     if input.len() % pixels_per_layer != 0 {
@@ -35,11 +38,6 @@ fn parse_input(w: usize, h: usize) -> Result<Vec<Array2<char>>, BadInput> {
         }))
     }
     Ok(result)
-}
-
-#[derive(Debug)]
-enum Fail {
-    BadInput(BadInput),
 }
 
 fn layer_popcounts(layers: &[Array2<char>]) -> HashMap<usize, HashMap<char, usize>> {
@@ -93,12 +91,17 @@ fn part2(layers: &[Array2<char>], w: usize, h: usize) {
     }
 }
 
-fn main() -> Result<(), Fail> {
-    const WIDTH: usize = 25;
-    const HEIGHT: usize = 6;
-    let layers = parse_input(WIDTH, HEIGHT).map_err(Fail::BadInput)?;
+const WIDTH: usize = 25;
+const HEIGHT: usize = 6;
+
+fn run(input: String) -> Result<(), Fail> {
+    let layers: Vec<Array2<char>> = parse_input(WIDTH, HEIGHT, input)?;
     println!("We have {} layers", layers.len());
     part1(&layers);
     part2(&layers, WIDTH, HEIGHT);
     Ok(())
+}
+
+fn main() -> Result<(), Fail> {
+    run_with_input(8, read_file_as_string, run)
 }

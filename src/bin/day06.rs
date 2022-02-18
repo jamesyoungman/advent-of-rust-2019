@@ -1,15 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use aoc::read_stdin_lines;
-
-fn string_to_oribit(s: &str) -> (String, String) {
-    match s.split_once(')') {
-        None => {
-            panic!("should be a valid orbit");
-        }
-        Some((a, b)) => (a.to_owned(), b.to_owned()),
-    }
-}
+use lib::error::Fail;
+use lib::input::{read_file_as_lines, run_with_input};
 
 fn build_tree(orbits: &[(String, String)]) -> (HashMap<String, String>, HashSet<String>) {
     let mut all_bodies: HashSet<String> = HashSet::new();
@@ -42,7 +34,12 @@ fn test_count_orbits() {
     let test_input: Vec<&str> = vec![
         "COM)B", "B)C", "C)D", "D)E", "E)F", "B)G", "G)H", "D)I", "E)J", "J)K", "K)L",
     ];
-    let orbits: Vec<(String, String)> = test_input.iter().cloned().map(string_to_oribit).collect();
+    let orbits: Vec<(String, String)> = test_input
+        .iter()
+        .cloned()
+        .map(string_to_oribit)
+        .map(|x| x.expect("test data should be valid"))
+        .collect::<Vec<(String, String)>>();
     let (parent_of, all_bodies) = build_tree(&orbits);
     assert_eq!(count_orbits(&parent_of, &all_bodies), 42);
 }
@@ -95,7 +92,13 @@ fn test_count_transfers() {
         "COM)B", "B)C", "C)D", "D)E", "E)F", "B)G", "G)H", "D)I", "E)J", "J)K", "K)L", "K)YOU",
         "I)SAN",
     ];
-    let orbits: Vec<(String, String)> = test_input.iter().cloned().map(string_to_oribit).collect();
+    let orbits: Vec<(String, String)> = test_input
+        .iter()
+        .cloned()
+        .map(|s| string_to_oribit(s))
+        .map(|x| x.expect("test data should be valid"))
+        .collect();
+
     let (parent_of, _all_bodies) = build_tree(&orbits);
     assert_eq!(
         count_transfers("YOU".to_string(), "SAN".to_string(), &parent_of),
@@ -121,13 +124,33 @@ fn part2(parent_of: &HashMap<String, String>) {
     }
 }
 
-fn main() {
-    let orbits: Vec<(String, String)> = read_stdin_lines()
-        .expect("input should be readable")
-        .iter()
-        .map(|s| string_to_oribit(s.as_str()))
+fn string_to_oribit(s: &str) -> Result<(String, String), Fail> {
+    if let Some((a, b)) = s.split_once(')') {
+        Ok((a.to_owned(), b.to_owned()))
+    } else {
+        Err(Fail(format!(
+            "'{}' should be a valid orbit but it is not",
+            s
+        )))
+    }
+}
+
+fn run(input: Vec<String>) -> Result<(), Fail> {
+    let parsed: Result<Vec<(String, String)>, Fail> = input
+        .into_iter()
+        .map(|s: String| -> Result<(String, String), Fail> { string_to_oribit(s.as_str()) })
         .collect();
-    let (parent_of, all_bodies) = build_tree(&orbits);
-    part1(&parent_of, &all_bodies);
-    part2(&parent_of);
+    match parsed {
+        Ok(orbits) => {
+            let (parent_of, all_bodies) = build_tree(&orbits);
+            part1(&parent_of, &all_bodies);
+            part2(&parent_of);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn main() -> Result<(), Fail> {
+    run_with_input(6, read_file_as_lines, run)
 }

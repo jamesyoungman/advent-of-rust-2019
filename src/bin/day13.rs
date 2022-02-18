@@ -7,9 +7,9 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::{thread, time};
 
-use lib::cpu::Processor;
-use lib::cpu::Word;
-use lib::cpu::{read_program_from_stdin, CpuFault, InputOutputError};
+use lib::cpu::{read_program_from_file, CpuFault, InputOutputError, Processor, Word};
+use lib::error::Fail;
+use lib::input::run_with_input;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 struct Position {
@@ -231,14 +231,12 @@ fn part2(program: &[Word]) -> Result<(), CpuFault> {
     }
 }
 
-fn main() {
-    match read_program_from_stdin() {
-        Ok(words) => {
-            part1(&words).expect("program should not fail in part1");
-            part2(&words).expect("program should not fail in part2");
-        }
-        Err(e) => {
-            eprintln!("failed to load program: {}", e);
-        }
+fn main() -> Result<(), Fail> {
+    fn run(words: Vec<Word>) -> Result<(), Fail> {
+        part1(&words)?;
+        part2(&words)?;
+        Ok(())
     }
+
+    run_with_input(13, read_program_from_file, run)
 }

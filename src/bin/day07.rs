@@ -1,8 +1,36 @@
 use itertools::Itertools;
+use lib::cpu::read_program_from_file;
+use lib::cpu::ProgramLoadError;
+use lib::input::run_with_input;
+use lib::input::InputError;
+use std::fmt::{self, Display, Formatter};
 
+use lib::cpu::InputOutputError;
 use lib::cpu::Word;
-use lib::cpu::{read_program_from_stdin, InputOutputError};
 use lib::cpu::{CpuFault, CpuStatus, Processor};
+
+#[derive(Debug)]
+struct Fail(pub String);
+
+impl From<InputError> for Fail {
+    fn from(e: InputError) -> Fail {
+        Fail(e.to_string())
+    }
+}
+
+impl From<ProgramLoadError> for Fail {
+    fn from(e: ProgramLoadError) -> Fail {
+        Fail(e.to_string())
+    }
+}
+
+impl Display for Fail {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.as_str())
+    }
+}
+
+impl std::error::Error for Fail {}
 
 fn run_amplifier_chain(program: &[Word], phases: &[Word], input: Word) -> Result<Word, CpuFault> {
     fn run_amplifier(program: &[Word], phase: Word, input: Word) -> Result<Word, CpuFault> {
@@ -116,14 +144,13 @@ fn test_amplifier_chain_program() {
     );
 }
 
-fn part1(program: &[Word]) {
+fn part1(program: &[Word]) -> Result<(), Fail> {
     match solve1(program, Word(0)) {
         Ok((output, _phases)) => {
             println!("Day 7 part 1: highest output is {}", output);
+            Ok(())
         }
-        Err(e) => {
-            eprintln!("Day 7 part 1: cpu failure: {}", e);
-        }
+        Err(e) => Err(Fail(e.to_string())),
     }
 }
 
@@ -276,25 +303,22 @@ fn test_solve2() {
     );
 }
 
-fn part2(program: &[Word]) {
+fn part2(program: &[Word]) -> Result<(), Fail> {
     match solve2(program, Word(0)) {
         Ok((output, _)) => {
             println!("Day 7 part 2: highest output is {}", output);
+            Ok(())
         }
-        Err(e) => {
-            eprintln!("cpu fault: {}", e);
-        }
+        Err(e) => Err(Fail(e.to_string())),
     }
 }
 
-fn main() {
-    match read_program_from_stdin() {
-        Ok(words) => {
-            part1(&words);
-            part2(&words);
-        }
-        Err(e) => {
-            eprintln!("failed to load program: {}", e);
-        }
-    }
+fn run(words: Vec<Word>) -> Result<(), Fail> {
+    part1(&words)?;
+    part2(&words)?;
+    Ok(())
+}
+
+fn main() -> Result<(), Fail> {
+    run_with_input(7, read_program_from_file, run)
 }

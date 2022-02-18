@@ -1,7 +1,8 @@
+use lib::error::Fail;
+use lib::input::read_file_as_lines;
+use lib::input::run_with_input;
 use std::collections::HashMap;
 use std::fmt::Display;
-
-use aoc::read_stdin_lines;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 struct Point {
@@ -278,7 +279,7 @@ fn test_solve1() {
     );
 }
 
-fn part1(lines: &[Vec<Move>], figure: &mut Option<Figure>) {
+fn part1(lines: &[Vec<Move>], figure: &mut Option<Figure>) -> Result<(), Fail> {
     match lines {
         [first, second] => match solve1(first, second, figure) {
             Some(d) => {
@@ -286,18 +287,17 @@ fn part1(lines: &[Vec<Move>], figure: &mut Option<Figure>) {
                     "Day 2 part 1: manhattan distance of closest intersection is {}",
                     d
                 );
+                Ok(())
             }
-            None => {
-                println!("Day 2 part 1: no solution, paths do not intersect");
-            }
+            None => Err(Fail(
+                "Day 2 part 1: no solution, paths do not intersect".to_string(),
+            )),
         },
-        _ => {
-            panic!("expected 2 paths, got {}", lines.len());
-        }
+        _ => Err(Fail(format!("expected 2 paths, got {}", lines.len()))),
     }
 }
 
-fn part2(lines: &[Vec<Move>], figure: &mut Option<Figure>) {
+fn part2(lines: &[Vec<Move>], figure: &mut Option<Figure>) -> Result<(), Fail> {
     match lines {
         [first, second] => match solve2(first, second, figure) {
             Some(d) => {
@@ -305,14 +305,13 @@ fn part2(lines: &[Vec<Move>], figure: &mut Option<Figure>) {
                     "Day 2 part 2: signal distance of closest intersection is {}",
                     d
                 );
+                Ok(())
             }
-            None => {
-                println!("Day 2 part 2: no solution, paths do not intersect");
-            }
+            None => Err(Fail(
+                "Day 2 part 2: no solution, paths do not intersect".to_string(),
+            )),
         },
-        _ => {
-            panic!("expected 2 paths, got {}", lines.len());
-        }
+        _ => Err(Fail(format!("expected 2 paths, got {}", lines.len()))),
     }
 }
 
@@ -320,12 +319,16 @@ fn string_to_moves(s: &str) -> Result<Vec<Move>, BadMove> {
     s.split(',').map(Move::try_from).collect()
 }
 
-fn main() {
-    let wires: Vec<Vec<Move>> = read_stdin_lines()
-        .expect("stdin should be readable")
+fn run(lines: Vec<String>) -> Result<(), Fail> {
+    let wires: Vec<Vec<Move>> = lines
         .iter()
         .map(|s| -> Vec<Move> { string_to_moves(s.as_str()).expect("input should be valid") })
         .collect();
-    part1(&wires, &mut None);
-    part2(&wires, &mut None);
+    part1(&wires, &mut None)?;
+    part2(&wires, &mut None)?;
+    Ok(())
+}
+
+fn main() -> Result<(), Fail> {
+    run_with_input(3, read_file_as_lines, run)
 }

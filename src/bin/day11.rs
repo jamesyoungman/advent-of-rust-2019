@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
-use lib::cpu::Processor;
-use lib::cpu::Word;
-use lib::cpu::{read_program_from_stdin, CpuFault, InputOutputError};
+use lib::cpu::{read_program_from_file, CpuFault, InputOutputError, Processor, Word};
+use lib::error::Fail;
+use lib::input::run_with_input;
 
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Hash, Clone)]
 struct Panel {
@@ -221,37 +221,37 @@ fn run_robot(
     Ok(location)
 }
 
-fn part1(program: &[Word]) {
+fn part1(program: &[Word]) -> Result<(), Fail> {
     let start = Panel { x: 0, y: 0 };
     let mut surface = ShipSurface::new();
     if let Err(e) = run_robot(start, PaintColour::Black, &mut surface, program) {
-        eprintln!("Painting robot crashed: {:?}", e);
+        Err(e.into())
     } else {
         println!(
             "Day 11 part 1: panels painted: {}",
             surface.get_painted_panel_count()
         );
+        Ok(())
     }
 }
 
-fn part2(program: &[Word]) {
+fn part2(program: &[Word]) -> Result<(), Fail> {
     let start = Panel { x: 0, y: 0 };
     let mut surface = ShipSurface::new();
     if let Err(e) = run_robot(start, PaintColour::White, &mut surface, program) {
-        eprintln!("Painting robot crashed: {:?}", e);
+        Err(e.into())
     } else {
         println!("Day 11 part 2\n{}", surface);
+        Ok(())
     }
 }
 
-fn main() {
-    match read_program_from_stdin() {
-        Ok(words) => {
-            part1(&words);
-            part2(&words);
-        }
-        Err(e) => {
-            eprintln!("failed to load program: {}", e);
-        }
+fn main() -> Result<(), Fail> {
+    fn run(words: Vec<Word>) -> Result<(), Fail> {
+        part1(&words)?;
+        part2(&words)?;
+        Ok(())
     }
+
+    run_with_input(11, read_program_from_file, run)
 }
