@@ -109,6 +109,7 @@ impl std::error::Error for BadInstruction {}
 
 #[derive(Clone, Copy, Debug)]
 pub enum InputOutputError {
+    Unprintable(Word),
     NoInput,
 }
 
@@ -116,6 +117,11 @@ impl Display for InputOutputError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InputOutputError::NoInput => f.write_str("ran out of input"),
+            InputOutputError::Unprintable(w) => write!(
+                f,
+                "cannot print word {} as this cannot be converted to a char",
+                w.0
+            ),
         }
     }
 }
