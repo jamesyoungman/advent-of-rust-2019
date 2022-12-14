@@ -3,7 +3,7 @@ use lib::input::run_with_input;
 use lib::{cpu::Word, error::Fail};
 
 fn run_program(program: &[Word], noun: Word, verb: Word) -> Word {
-    let mut modified_program: Vec<Word> = program.iter().copied().collect();
+    let mut modified_program: Vec<Word> = program.to_vec();
     modified_program[1] = noun;
     modified_program[2] = verb;
     let mut cpu = Processor::new(Word(0));

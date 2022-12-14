@@ -114,8 +114,8 @@ impl System1D {
     fn new(positions: &[Distance], velocities: &[Velocity]) -> System1D {
         assert_eq!(positions.len(), velocities.len());
         System1D {
-            position: positions.iter().copied().collect(),
-            velocity: velocities.iter().copied().collect(),
+            position: positions.to_vec(),
+            velocity: velocities.to_vec(),
             size: positions.len(),
         }
     }

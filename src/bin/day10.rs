@@ -174,7 +174,7 @@ fn solve1(field: &AsteroidField) -> Option<Candidate> {
             visible_count: maybe_visible_from_p.len(),
         });
     }
-    candidates.iter().rev().cloned().next()
+    candidates.iter().rev().next().cloned()
 }
 
 #[cfg(test)]
@@ -339,7 +339,7 @@ fn test_bearing() {
     check_bearing_from(&Point { x: 5, y: 5 }, &Point { x: 0, y: 5 }, 270.0);
 }
 
-fn order_by_reverse_distance(base: &Point, points: &mut Vec<Point>) {
+fn order_by_reverse_distance(base: &Point, points: &mut [Point]) {
     // We already know tha the slopes of the line betwen base and a is the
     // same as the slope of the line between base and b.  Hence to find the
     // closer of a and b we can simply use the manhattan distance.
